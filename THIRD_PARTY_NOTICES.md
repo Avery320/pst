@@ -1,8 +1,8 @@
 # Third-party notices
 
-This file records the third-party software used by the browser editor in **pst 0.1.0**. It does not set a license for pst's own application code.
+This file records the third-party software used by the browser editor and the desktop integration in **pst 0.3.0**. It does not set a license for pst's own application code.
 
-Full copyright notices and license texts are preserved in [LICENSE-THIRD-PARTY.txt](./LICENSE-THIRD-PARTY.txt). Include both files when distributing the browser build.
+Full browser/API copyright notices and license texts are preserved in [LICENSE-THIRD-PARTY.txt](./LICENSE-THIRD-PARTY.txt). Include both files when distributing the browser build. Desktop distributions additionally include the generated `THIRD_PARTY_RUST.txt` resource described below.
 
 ## Checked scope
 
@@ -13,7 +13,7 @@ Checked on 2026-10-20 against the installed package versions in `package-lock.js
 - Attributed license comments in the retained VUtils modules.
 - The production Vite browser build of this application, using its retained-module graph and emitted runtime chunks.
 
-The production build retained code from the 18 npm dependency packages listed below, plus generated runtime helpers from Vite and Rolldown. This is an inventory and notice-preservation check for this browser output; it is not an audit of every installed development dependency or a complete historical provenance audit of third-party code. Changes to dependencies or import paths require this inventory to be checked again.
+The original browser-build check retained code from the 18 npm dependency packages listed below, plus generated runtime helpers from Vite and Rolldown. The desktop integration adds the separately listed Tauri JavaScript API and its bundled helper notices. This is an inventory and notice-preservation check for the identified output; it is not an audit of every installed development dependency or a complete historical provenance audit of third-party code. Changes to dependencies or import paths require this inventory to be checked again.
 
 ## Browser dependencies
 
@@ -39,6 +39,17 @@ The production build retained code from the 18 npm dependency packages listed be
 | `lodash` | 4.17.21 | MIT |
 
 The installed package license declarations are distinct from licenses of attributed source incorporated inside those packages.
+
+### Tauri desktop integration
+
+The shared frontend imports `isTauri` from `@tauri-apps/api/core` and uses the API's native command and window/event functions only in the desktop runtime. The API code is therefore also present in the shared frontend build; it is not limited to Rust code inside the desktop binary.
+
+| Component | Installed version or source | Declared license / retained notice |
+| --- | --- | --- |
+| `@tauri-apps/api` | 2.12.4 | `Apache-2.0 OR MIT` — both supplied license texts and the package SPDX attribution file are retained |
+| tslib helpers bundled inside `@tauri-apps/api` | `external/tslib/tslib.es6.js` from API 2.12.4; no independent bundled version is asserted | 0BSD-style Microsoft permission/warranty notice copied exactly from the source header |
+
+These texts were copied from the installed, lockfile-pinned API package, including its `LICENSE-MIT`, `LICENSE-APACHE-2.0`, and `LICENSE.spdx`. The package's `OR` expression offers alternative license terms; preserving both original texts does not convert that expression into a requirement to use both. The desktop Rust crates have their own declarations and notices.
 
 ### Generated runtime helpers
 
@@ -75,7 +86,21 @@ The package README separately states that its auto-fill functionality references
 
 The npm dependency tree also installs packages for other upstream features and environments. For example, `@resvg/resvg-js` declares MPL-2.0, and `jszip` declares `MIT OR GPL-3.0-or-later`. Neither appeared in the retained-module graph for the checked production browser build. ExcelJS, the auto-fill implementation, and the `lottie-web` package were also absent. VRender's small Lottie picker registrations remain covered by the VRender notice above.
 
-This file covers the browser output described above. Distributing a copy of `node_modules`, enabling Node rendering, or adding other plugin entries changes the distribution scope and requires its corresponding license inventory.
+This npm inventory covers the frontend output described above. Distributing a copy of `node_modules`, enabling Node rendering, or adding other plugin entries changes the distribution scope and requires its corresponding license inventory.
+
+## Desktop Rust dependencies
+
+`node scripts/desktop-licenses.mjs --features custom-protocol --target <target-triple>` generates `src-tauri/THIRD_PARTY_RUST.txt` from the installed crate sources and the exact `src-tauri/Cargo.lock`, with the feature used by the native release build. Repeat `--target` to include multiple architectures; the macOS universal build uses both `aarch64-apple-darwin` and `x86_64-apple-darwin`. The release workflow regenerates this file before packaging, and the desktop bundle includes it alongside the two frontend notice files.
+
+The generator follows each requested target's `cargo metadata --locked --filter-platform` dependency closure. It includes normal and build dependencies and excludes purely development-only dependency edges and pst's own workspace packages. Build dependencies are intentionally included even where they do not contribute linked code, so this is a conservative notice inventory rather than a claim that every listed crate is shipped as executable code. License/notice files in bundled source subdirectories are also retained when present.
+
+The generated file records the targets, lockfile SHA-256, crate names and versions, declared license expressions, crate authors, source/repository metadata, and exact license/notice file hashes and texts. Identical file contents are stored once with all originating crate/file attributions retained. It has no generated timestamp or local cache paths, so the same locked sources and target arguments produce the same output.
+
+Some published crate archives omit their repository's license files. Reviewed supplements are stored in `licenses/desktop/upstream-licenses.json`, with exact original text, SHA-256, official source URL, and the Git commit recorded by the crate's `.cargo_vcs_info.json`. The collector verifies those identities before using a supplement. The objc2 project supplies a licensing declaration and links to the MIT terms rather than a complete copyright notice; its declaration and a separately identified canonical MIT reference are preserved, with MIT selected from the offered alternatives. No copyright name or year is invented. The selectors crate's MPL source header and the full canonical MPL 2.0 reference are likewise identified separately. The canonical references come from the official SPDX license-list repository at the commit recorded in the supplement file.
+
+The resolved graph contains MPL-2.0 components. To provide their covered source, the collector also produces `src-tauri/THIRD_PARTY_SOURCES/`: the exact, unmodified published archives for `selectors` 0.38.0, `cssparser` 0.37.0, `dtoa-short` 0.3.5, `cssparser-macros` 0.7.1, and `option-ext` 0.2.0, plus `README.txt` with source URLs, archive hashes, extraction instructions, and the full MPL 2.0 terms. Each archive is verified against both `Cargo.lock` and the reviewed inventory. This small cross-platform source set is intentionally identical in Windows and macOS distributions, even if a platform does not use every listed crate. The installer includes it, and releases attach the same five `.crate` archives and the source notice. No covered source has been modified by pst.
+
+Generation fails if dependency metadata, required license evidence, reviewed upstream hashes, or the original source archives are unavailable or inconsistent. A failed scan must be resolved against the relevant upstream source; it must not be represented as a complete scan or replaced with an invented generic license. This process preserves the discovered license files and declarations. It does not establish a new license for pst, audit every inline historical attribution, or make a legal determination from a package's SPDX declaration alone.
 
 ## License-text provenance
 
