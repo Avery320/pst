@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Only the local main window can open/save user-selected files and finish saving before closing.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": [
+    "allow-open-document",
+    "allow-save-file",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-destroy"
+  ]
+}
+
