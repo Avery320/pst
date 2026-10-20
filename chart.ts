@@ -36,6 +36,19 @@ const toChartDate = (date: string): string => date.replaceAll('-', '/');
 const headerCalendarDate = (date: Date): string => date.getFullYear() < 1900 ? '1900-01-01'
   : date.getFullYear() > 2100 ? '2100-12-31' : normalizeChartDate(date);
 
+// Native header cells clip their children. Choose a complete label using its
+// rendered width before applying the cell limit; a clipped week number is wrong.
+const fitHeaderLabel = (label: VRender.Text, choices: (string | string[])[], width: number): VRender.Text | undefined => {
+  for (const text of choices) {
+    label.setAttributes({ text });
+    if (label.AABBBounds.width() + 1 <= width) {
+      label.setAttributes({ maxLineWidth: width, ellipsis: false });
+      return label;
+    }
+  }
+  return undefined;
+};
+
 /** The only layer that knows VTable's mutable records and rendering APIs. */
 export class TimelineChart {
   private readonly container: HTMLElement;
@@ -444,20 +457,19 @@ export class TimelineChart {
     const day: TYPES.ITimelineScale = {
       unit: 'day', step: 1, rowHeight: 36, style: { ...headerStyle, fontSize: 10 },
       format: ({ startDate }) => `${startDate.getDate()} ${formatWeekdayZh(headerCalendarDate(startDate))}`,
-      customLayout: ({ width, height, index, startDate }) => {
+      customLayout: ({ width, height, startDate }) => {
         const rootContainer = new VRender.Group({ width, height, pickable: false });
-        const stride = view.dayWidth >= 14 ? 1 : Math.ceil(28 / view.dayWidth);
-        if (index % stride === 0) {
-          const iso = headerCalendarDate(startDate);
-          const weekday = formatWeekdayZh(iso);
-          const text = view.dayWidth >= 14
-            ? [String(startDate.getDate()), view.dayWidth >= 28 ? weekday : weekday.replace('週', '')]
-            : [`${startDate.getMonth() + 1}/${startDate.getDate()}`];
-          rootContainer.appendChild(new VRender.Text({ x: width / 2, y: height / 2, text,
-            fontFamily: FONT, fontSize: 9, lineHeight: 13, textAlign: 'center', textBaseline: 'middle',
-            fill: [0, 6].includes(startDate.getDay()) ? '#aa8069' : '#65786e',
-            maxLineWidth: Math.max(width, view.dayWidth * stride) - 1 }));
-        }
+        const weekday = formatWeekdayZh(headerCalendarDate(startDate));
+        const dayNumber = String(startDate.getDate());
+        const choices: string[][] = [];
+        if (width >= 28) choices.push([dayNumber, weekday]);
+        if (width >= 14) choices.push([dayNumber, weekday.replace('週', '')]);
+        choices.push([dayNumber]);
+        const label = fitHeaderLabel(new VRender.Text({ x: width / 2, y: height / 2, text: '',
+          fontFamily: FONT, fontSize: 9, lineHeight: 13, textAlign: 'center', textBaseline: 'middle',
+          fill: [0, 6].includes(startDate.getDay()) ? '#aa8069' : '#65786e'
+        }), choices, Math.max(0, width - 2));
+        if (label) rootContainer.appendChild(label);
         return { rootContainer, renderDefaultText: false };
       }
     };
@@ -466,20 +478,17 @@ export class TimelineChart {
       : view.scale === 'week' ? [month, {
         unit: 'week', step: 1, startOfWeek: view.weekStartsOn === 0 ? 'sunday' : 'monday',
         rowHeight: 29, style: headerStyle,
-        customLayout: ({ width, height, index, startDate, endDate }) => {
+        customLayout: ({ width, height, startDate, endDate }) => {
           const rootContainer = new VRender.Group({ width, height, pickable: false });
-          const stride = Math.max(1, Math.ceil(66 / (view.dayWidth * 7)));
-          if (index % stride === 0) {
-            const first = getISOWeek(headerCalendarDate(startDate));
-            const last = getISOWeek(headerCalendarDate(endDate));
-            // A Sunday–Saturday range spans two ISO (Monday-based) weeks.
-            const week = first.week === last.week && first.year === last.year
-              ? `W${first.week}` : `W${first.week}–${last.week}`;
-            rootContainer.appendChild(new VRender.Text({ x: 5, y: height / 2,
-              text: `${startDate.getMonth() + 1}/${startDate.getDate()} · ${week}`,
-              fontFamily: FONT, fontSize: 10, fill: '#65786e', textAlign: 'left', textBaseline: 'middle',
-              maxLineWidth: Math.max(width, view.dayWidth * 7 * stride) - 8, ellipsis: '…' }));
-          }
+          const first = getISOWeek(headerCalendarDate(startDate));
+          const last = getISOWeek(headerCalendarDate(endDate));
+          // A Sunday–Saturday range spans two ISO (Monday-based) weeks.
+          const week = first.week === last.week && first.year === last.year
+            ? `W${first.week}` : `W${first.week}–${last.week}`;
+          const label = fitHeaderLabel(new VRender.Text({ x: 5, y: height / 2, text: '',
+            fontFamily: FONT, fontSize: 10, fill: '#65786e', textAlign: 'left', textBaseline: 'middle'
+          }), [`${startDate.getMonth() + 1}/${startDate.getDate()} · ${week}`, week], Math.max(0, width - 8));
+          if (label) rootContainer.appendChild(label);
           return { rootContainer, renderDefaultText: false };
         }
       }, { ...day, visible: false }]
