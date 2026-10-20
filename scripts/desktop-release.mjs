@@ -220,7 +220,7 @@ function releaseMarker(metadata) {
   return '<!-- pst-desktop-release:' + metadata.sourceSha + ' -->';
 }
 
-export function checkRemoteRelease(metadata, { repo, read, eventName }) {
+export function checkRemoteRelease(metadata, { repo, read, eventName, releaseId }) {
   const prefix = 'repos/' + repo;
   const tagRef = read(prefix + '/git/ref/tags/' + metadata.tag, true);
   if (tagRef) {
@@ -232,16 +232,47 @@ export function checkRemoteRelease(metadata, { repo, read, eventName }) {
   } else {
     check(eventName !== 'push', 'The pushed release tag no longer exists.');
   }
-  const release = read(prefix + '/releases/tags/' + metadata.tag, true);
-  if (release) {
-    check(release.draft, metadata.tag + ' is already published. Bump the app version instead of replacing published installers.');
-    check(release.target_commitish === metadata.sourceSha && release.body?.includes(releaseMarker(metadata)), 'An unrelated draft already uses ' + metadata.tag + '; this workflow will not change it.');
+  let release;
+  if (releaseId !== undefined) {
+    check(Number.isSafeInteger(releaseId) && releaseId > 0, 'The expected release ID is invalid.');
+    release = read(prefix + '/releases/' + releaseId, true);
+    check(release && release.id === releaseId, 'The expected draft release disappeared or its ID changed.');
+  } else {
+    release = read(prefix + '/releases/tags/' + metadata.tag, true);
+    // GitHub's tag endpoint may omit drafts. The authenticated collection includes them.
+    if (!release) {
+      for (let page = 1; ; page++) {
+        const releases = read(prefix + '/releases?per_page=100&page=' + page);
+        check(Array.isArray(releases) && releases.length <= 100, 'GitHub returned an invalid release collection.');
+        for (const candidate of releases) {
+          if (candidate?.tag_name !== metadata.tag) continue;
+          check(!release, 'Multiple releases use ' + metadata.tag + '; this workflow will not choose between them.');
+          release = candidate;
+        }
+        if (releases.length < 100) break;
+      }
+    }
   }
-  return release;
+  if (release) {
+    check(Number.isSafeInteger(release.id) && release.id > 0 && release.tag_name === metadata.tag, 'GitHub returned an unexpected release ID or tag.');
+    check(release.draft === true, metadata.tag + ' is already published. Bump the app version instead of replacing published installers.');
+    check(release.target_commitish === metadata.sourceSha && typeof release.body === 'string' && release.body.includes(releaseMarker(metadata)), 'An unrelated draft already uses ' + metadata.tag + '; this workflow will not change it.');
+  }
+  return release ?? null;
 }
 
-function preflight(metadata) {
-  return checkRemoteRelease(metadata, { repo: repository(), read: githubGet, eventName: process.env.GITHUB_EVENT_NAME });
+function preflight(metadata, releaseId) {
+  return checkRemoteRelease(metadata, { repo: repository(), read: githubGet, eventName: process.env.GITHUB_EVENT_NAME, releaseId });
+}
+
+export function verifyRemoteReleaseAssets(draft, files) {
+  const expectedAssets = files.map((file) => file.name).sort();
+  check(Array.isArray(draft.assets) && JSON.stringify(draft.assets.map((asset) => asset.name).sort()) === JSON.stringify(expectedAssets), 'Draft contains unexpected or missing assets; it was not published.');
+  for (const file of files) {
+    const asset = draft.assets.find((candidate) => candidate.name === file.name);
+    check(asset.size === file.size && asset.state === 'uploaded', 'GitHub asset upload is incomplete: ' + file.name);
+    check(asset.digest === 'sha256:' + file.sha256, 'GitHub asset checksum mismatch: ' + file.name);
+  }
 }
 
 function releaseNotes(metadata, repo) {
@@ -284,19 +315,20 @@ function publish(metadata) {
   const repo = repository();
   const notesFile = join(ROOT, 'desktop-release-notes.md');
   writeFileSync(notesFile, releaseNotes(metadata, repo));
-  const existing = preflight(metadata);
-  if (!existing) {
+  let draft = preflight(metadata);
+  if (!draft) {
     gh(['release', 'create', metadata.tag, '--repo', repo, '--draft', '--target', metadata.sourceSha,
       '--title', 'pst ' + metadata.tag, '--notes-file', notesFile]);
+    draft = preflight(metadata);
   }
+  check(draft, 'The expected draft release disappeared.');
+  const releaseId = draft.id;
   // Clobber is restricted to a draft created for this exact commit. Published releases never reach this step.
-  preflight(metadata);
+  // Pin subsequent checks to this ID, rather than accepting a replacement draft with the same tag.
+  preflight(metadata, releaseId);
   gh(['release', 'upload', metadata.tag, '--repo', repo, '--clobber', ...files.map((file) => join(directory, file.name))]);
-  const draft = preflight(metadata);
-  check(draft?.draft, 'The expected draft release disappeared.');
-  const expectedAssets = files.map((file) => file.name).sort();
-  check(JSON.stringify(draft.assets.map((asset) => asset.name).sort()) === JSON.stringify(expectedAssets), 'Draft contains unexpected or missing assets; it was not published.');
-  for (const file of files) check(draft.assets.some((asset) => asset.name === file.name && asset.size === file.size && asset.state === 'uploaded'), 'GitHub asset upload is incomplete: ' + file.name);
+  draft = preflight(metadata, releaseId);
+  verifyRemoteReleaseAssets(draft, files);
   gh(['release', 'edit', metadata.tag, '--repo', repo, '--draft=false', '--latest', '--notes-file', notesFile]);
   const url = 'https://github.com/' + repo + '/releases/tag/' + metadata.tag;
   console.log('Published ' + url);
