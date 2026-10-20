@@ -4,11 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   base: './',
-  clearScreen: false,
-  server: {
-    strictPort: true,
-    watch: { ignored: ['**/src-tauri/**'] },
-  },
+  server: { host: '127.0.0.1', port: 5175, strictPort: true },
+  preview: { host: '127.0.0.1', port: 5175, strictPort: true },
   plugins: [{
     name: 'pst-third-party-notices',
     generateBundle() {
@@ -22,7 +19,6 @@ export default defineConfig({
     },
   }],
   build: {
-    target: ['es2022', 'safari16', 'chrome105'],
-    chunkSizeWarningLimit: 2000,
+    target: 'es2022',
   },
 });

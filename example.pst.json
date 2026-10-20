@@ -91,11 +91,10 @@
     }
   ],
   "view": {
-    "start": "2026-10-01",
-    "end": "2026-11-11",
-    "scale": "week",
-    "dayWidth": 18,
-    "rowHeight": 48,
+    "start": "2026-01-01",
+    "end": "2026-12-31",
+    "scale": "month",
+    "dayWidth": 1,
     "showNotes": false,
     "showWeekends": true,
     "weekStartsOn": 1,

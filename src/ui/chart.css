@@ -1,0 +1,15 @@
+.pst-chart { display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; background: var(--ui-color-surface); }
+.pst-table-pane, .pst-timeline-pane { height: 100%; overflow: auto; }
+.pst-data-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; color: var(--ui-color-text); font: inherit; }
+.pst-data-table th { position: sticky; top: 0; z-index: 2; height: var(--ui-chart-header-height); background: var(--ui-color-subtle); color: var(--ui-color-muted); font-weight: var(--ui-weight-strong); }
+.pst-data-table th, .pst-data-table td { padding: 0 var(--ui-space-2); border-right: 1px solid var(--ui-color-border); border-bottom: 1px solid var(--ui-color-border); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pst-data-table td[data-field="start"], .pst-data-table td[data-field="end"] { padding-inline: var(--ui-space-1); color: var(--ui-color-muted); text-align: center; font-variant-numeric: tabular-nums; }
+.pst-data-table tbody tr { cursor: pointer; }
+.pst-data-table tbody tr:hover { background: var(--ui-color-hover); }
+.pst-data-table tbody tr.is-selected { background: var(--ui-color-selected); }
+.pst-data-table td:has(input, textarea) { padding: 0; }
+.pst-data-table input, .pst-data-table textarea { display: block; width: 100%; height: calc(var(--ui-row-height) - 1px); min-height: 0; margin: 0; border-color: var(--ui-color-accent); border-radius: 0; resize: none; }
+.pst-timeline-header { position: sticky; top: 0; z-index: 3; height: var(--ui-chart-header-height); width: max-content; }
+.pst-timeline-body { width: max-content; }
+.pst-timeline-header svg, .pst-timeline-body > svg { display: block; max-width: none; }
+.pst-chart-divider { background: transparent; z-index: 15; }

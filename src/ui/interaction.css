@@ -1,0 +1,23 @@
+.pst-interaction-layer { position: absolute; z-index: 12; overflow: hidden; pointer-events: none; isolation: isolate; }
+.pst-item-target { position: absolute; pointer-events: none; border-radius: var(--ui-radius); z-index: 2; }
+.pst-item-target button { position: absolute; display: block; appearance: none; padding: 0; margin: 0; min-width: 0; min-height: 0; border-radius: var(--ui-radius); pointer-events: auto; touch-action: none; user-select: none; border: 0; box-shadow: none; }
+.pst-item-target .pst-move-control { inset: 0; background: transparent; cursor: grab; transition: background .12s,border-color .12s; border: 1px solid transparent; }
+.pst-item-target:hover .pst-move-control,.pst-item-target.is-selected .pst-move-control { border-color: var(--ui-color-inverse); }
+.pst-item-target button:focus-visible { border-color: var(--ui-color-text); }
+.pst-item-target.is-origin .pst-move-control { background: var(--ui-color-selected); cursor: grabbing; border: 1px dashed var(--item-color); }
+.pst-item-target .pst-resize-control { width: 8px; top: 1px; bottom: 1px; background: var(--ui-color-inverse); border: 1px solid var(--item-color); cursor: ew-resize; opacity: .65; border-radius: var(--ui-radius); }
+.pst-item-target .pst-resize-control:after { content: ""; position: absolute; top: 25%; bottom: 25%; width: 1px; left: 2px; background: var(--item-color); }
+.pst-item-target .pst-resize-start { left: -7px; }
+.pst-item-target .pst-resize-end { right: -7px; }
+.pst-item-target:hover .pst-resize-control,.pst-item-target.is-selected .pst-resize-control,.pst-item-target .pst-resize-control:focus-visible { opacity: 1; }
+.pst-item-target.is-milestone .pst-move-control { border-radius: 50%; }
+.pst-drag-ghost { position: absolute; z-index: 6; pointer-events: none; border: 2px solid; border-radius: var(--ui-radius); box-sizing: border-box; padding: 1px 7px; color: var(--ui-color-text); font: var(--ui-weight-strong) var(--ui-font-body)/1.5 var(--ui-font-family); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-shadow: 0 2px 6px var(--ui-color-shadow); }
+.pst-drag-ghost.is-milestone { transform: rotate(45deg); padding: 0; border-radius: 1px; }
+.pst-snap-range { position: absolute; top: 0; bottom: 0; z-index: 3; background: color-mix(in srgb, var(--ui-color-accent) 6%, transparent); pointer-events: none; }
+.pst-snap-guide { position: absolute; top: 0; bottom: 0; width: 2px; z-index: 5; background: var(--ui-color-accent); box-shadow: 0 0 0 2px var(--ui-color-selected); pointer-events: none; }
+.pst-drag-tooltip { position: absolute; z-index: 200; padding: var(--ui-space-2) var(--ui-space-3); background: var(--ui-color-tooltip); color: var(--ui-color-inverse); border: 1px solid var(--ui-color-accent); border-radius: var(--ui-radius); box-shadow: 0 6px 20px var(--ui-color-shadow); pointer-events: none; font: inherit; white-space: pre-line; box-sizing: border-box; }
+@media (pointer:coarse) {
+  .pst-item-target .pst-resize-control { width: 12px; top: -5px; bottom: -5px; }
+  .pst-item-target .pst-resize-start { left: -11px; }
+  .pst-item-target .pst-resize-end { right: -11px; }
+}

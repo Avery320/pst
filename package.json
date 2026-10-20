@@ -1,6 +1,6 @@
 {
   "name": "pst",
-  "version": "0.3.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A lightweight timeline and table editor for presentation-ready diagrams.",
   "type": "module",
@@ -8,25 +8,13 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite",
     "check": "tsc --noEmit",
-    "test": "node --test --test-isolation=none --test-reporter=spec model.test.ts calendar.test.ts chart-dates.test.ts chart-interaction.test.ts platform.test.ts",
+    "test": "node --test --test-isolation=none --test-reporter=spec tests/*.test.ts",
     "build": "npm run check && vite build",
-    "preview": "vite preview --host 0.0.0.0",
-    "desktop:frontend": "vite --host 127.0.0.1 --port 1420 --strictPort",
-    "tauri": "tauri",
-    "predesktop:dev": "node scripts/desktop-licenses.mjs",
-    "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
-  },
-  "dependencies": {
-    "@tauri-apps/api": "2.12.4",
-    "@visactor/vtable-editors": "1.26.8",
-    "@visactor/vtable-gantt": "1.26.8",
-    "@visactor/vtable-plugins": "1.26.8"
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.12.3",
     "@types/node": "22.18.0",
     "typescript": "5.9.3",
     "vite": "8.3.4"
