@@ -16,21 +16,28 @@ export interface DateMarker {
   color: string;
 }
 
+/** Normalized view settings. Older schema-1 documents receive the new defaults. */
+export interface TimelineView {
+  start: string;
+  end: string;
+  scale: "day" | "week" | "month";
+  dayWidth: number;
+  rowHeight: number;
+  showNotes: boolean;
+  showWeekends: boolean;
+  weekStartsOn: 0 | 1;
+  showToday: boolean;
+  snapDays: 1 | 7;
+  showGrid: boolean;
+}
+
 export interface TimelineDocument {
   schemaVersion: 1;
   title: string;
   subtitle: string;
   items: TimelineItem[];
   markers: DateMarker[];
-  view: {
-    start: string;
-    end: string;
-    scale: "day" | "week" | "month";
-    dayWidth: number;
-    rowHeight: number;
-    showNotes: boolean;
-    showWeekends: boolean;
-  };
+  view: TimelineView;
 }
 
 const DAY_MS = 86_400_000;
@@ -98,6 +105,12 @@ function field(object: RecordValue, key: string, label: string): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(object, key);
   if (!descriptor || !("value" in descriptor)) throw new Error(`${label}缺少有效的「${key}」欄位。`);
   return descriptor.value;
+}
+
+/** A missing field may migrate; an explicit undefined/accessor must still fail. */
+function optionalField(object: RecordValue, key: string, fallback: unknown): unknown {
+  if (!Object.hasOwn(object, key)) return fallback;
+  return field(object, key, "顯示設定");
 }
 
 function textField(value: unknown, label: string, maxLength: number, allowEmpty = false): string {
@@ -196,10 +209,16 @@ export function validateDocument(value: unknown): TimelineDocument {
   if (scale !== "day" && scale !== "week" && scale !== "month") {
     throw new Error("時間刻度必須是 day、week 或 month。");
   }
-  const dayWidth = numberField(field(sourceView, "dayWidth", "顯示設定"), "每日寬度", 12, 80);
+  const dayWidth = numberField(field(sourceView, "dayWidth", "顯示設定"), "每日寬度", 1, 80);
   const rowHeight = numberField(field(sourceView, "rowHeight", "顯示設定"), "資料列高度", 32, 64);
   const showNotes = booleanField(field(sourceView, "showNotes", "顯示設定"), "顯示備註設定");
   const showWeekends = booleanField(field(sourceView, "showWeekends", "顯示設定"), "顯示週末設定");
+  const weekStartsOn = optionalField(sourceView, "weekStartsOn", 1);
+  if (weekStartsOn !== 0 && weekStartsOn !== 1) throw new Error("每週起始日必須是 0（週日）或 1（週一）。");
+  const showToday = booleanField(optionalField(sourceView, "showToday", true), "顯示今日線設定");
+  const snapDays = optionalField(sourceView, "snapDays", 1);
+  if (snapDays !== 1 && snapDays !== 7) throw new Error("拖曳對齊天數必須是 1 或 7。");
+  const showGrid = booleanField(optionalField(sourceView, "showGrid", true), "顯示格線設定");
 
   return {
     schemaVersion: 1,
@@ -207,7 +226,7 @@ export function validateDocument(value: unknown): TimelineDocument {
     subtitle,
     items,
     markers,
-    view: { start, end, scale, dayWidth, rowHeight, showNotes, showWeekends },
+    view: { start, end, scale, dayWidth, rowHeight, showNotes, showWeekends, weekStartsOn, showToday, snapDays, showGrid },
   };
 }
 
@@ -272,7 +291,10 @@ export function createEmptyDocument(today = todayCalendarDate()): TimelineDocume
     subtitle: "",
     items: [],
     markers: [],
-    view: { start, end, scale: "week", dayWidth: 18, rowHeight: 48, showNotes: false, showWeekends: true },
+    view: {
+      start, end, scale: "week", dayWidth: 18, rowHeight: 48,
+      showNotes: false, showWeekends: true, weekStartsOn: 1, showToday: true, snapDays: 1, showGrid: true,
+    },
   };
 }
 

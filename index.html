@@ -38,8 +38,8 @@
           </div>
         </section>
 
-        <div class="editor-layout">
-          <section class="canvas-panel" aria-labelledby="canvas-heading">
+        <div id="editor-layout" class="editor-layout">
+          <section id="canvas-panel" class="canvas-panel" aria-labelledby="canvas-heading">
             <div class="canvas-toolbar">
               <div class="toolbar-group">
                 <h1 id="canvas-heading" class="panel-label"><span data-icon="timeline"></span>時間圖表</h1>
@@ -56,6 +56,7 @@
                 <span class="toolbar-divider" aria-hidden="true"></span>
                 <button id="add-task" type="button" class="button button-small button-tinted"><span data-icon="plus"></span>新增時段</button>
                 <button id="add-milestone" type="button" class="icon-button" title="新增里程碑" aria-label="新增里程碑"><span data-icon="diamond"></span></button>
+                <button id="toggle-inspector" type="button" class="button button-small button-quiet inspector-toggle" aria-controls="inspector" aria-expanded="true" title="收合編輯面板"><span data-icon="sliders"></span><span id="inspector-toggle-label">收合面板</span></button>
               </div>
             </div>
 
@@ -71,8 +72,25 @@
               </div>
               <div class="zoom-control">
                 <label for="zoom">刻度寬度</label>
-                <input id="zoom" type="range" min="12" max="80" step="2" />
+                <button id="zoom-out" class="icon-button zoom-step" type="button" aria-label="縮小時間刻度" title="縮小時間刻度"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg></button>
+                <input id="zoom" type="range" min="1" max="80" step="1" />
+                <button id="zoom-in" class="icon-button zoom-step" type="button" aria-label="放大時間刻度" title="放大時間刻度"><span data-icon="plus"></span></button>
                 <output id="zoom-value" for="zoom"></output>
+                <button id="fit-width" type="button" class="text-button" title="依目前可見寬度調整時間刻度">符合寬度</button>
+              </div>
+            </div>
+
+            <div class="calendar-toolbar" aria-label="日期範圍導覽">
+              <div class="calendar-navigation" role="group" aria-label="切換顯示時段">
+                <button id="range-prev" type="button" class="icon-button" title="上一個顯示時段" aria-label="上一個顯示時段"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
+                <button id="range-today" type="button" class="button button-small button-secondary" title="跳到今天">今天</button>
+                <button id="range-next" type="button" class="icon-button" title="下一個顯示時段" aria-label="下一個顯示時段"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6" /></svg></button>
+              </div>
+              <span id="calendar-summary" class="calendar-summary" aria-live="polite">日期範圍</span>
+              <div class="calendar-presets" role="group" aria-label="常用日期範圍">
+                <button id="range-week" type="button" class="button button-small button-quiet">本週</button>
+                <button id="range-month" type="button" class="button button-small button-quiet">本月</button>
+                <button id="range-year" type="button" class="button button-small button-quiet">今年</button>
               </div>
             </div>
 
@@ -88,14 +106,21 @@
               </div>
             </div>
 
+            <div class="timeline-overview">
+              <div class="timeline-overview-heading"><label for="timeline-scroll">時間軸位置</label><output id="timeline-scroll-label" for="timeline-scroll">拖曳下方滑桿，查看其他日期</output></div>
+              <input id="timeline-scroll" type="range" min="0" max="1000" step="1" value="0" aria-label="水平捲動時間軸" />
+            </div>
             <div class="canvas-footer">
               <span><span data-icon="pointer"></span>拖曳時段移動日期，拖曳兩端調整長度</span>
+              <span id="drag-status" class="drag-status" role="status" aria-live="polite"></span>
               <span id="range-notice" class="range-notice" aria-live="polite"></span>
               <span class="canvas-footer-right">雙擊表格文字即可編輯</span>
             </div>
           </section>
 
-          <aside class="inspector" aria-label="圖表編輯面板">
+          <div id="inspector-resize" class="inspector-resize" role="separator" tabindex="0" aria-label="調整編輯面板寬度" aria-controls="inspector canvas-panel" aria-orientation="vertical" aria-valuemin="248" aria-valuemax="520" aria-valuenow="292" aria-describedby="inspector-resize-help" title="拖曳調整面板寬度；雙擊還原"><span aria-hidden="true"></span></div>
+          <p id="inspector-resize-help" class="sr-only">使用左右方向鍵調整寬度，按住 Shift 加大步幅。Home 縮至最窄，End 放至最寬，Enter 還原。拖曳中按 Escape 取消。</p>
+          <aside id="inspector" class="inspector" aria-label="圖表編輯面板">
             <div class="inspector-tabs" role="tablist" aria-label="編輯分類">
               <button id="tab-item" type="button" class="inspector-tab" role="tab" aria-selected="true" aria-controls="pane-item" data-tab="item">項目</button>
               <button id="tab-markers" type="button" class="inspector-tab" role="tab" aria-selected="false" aria-controls="pane-markers" data-tab="markers" tabindex="-1">日期標記</button>
@@ -142,6 +167,10 @@
               <div class="pane-heading"><h2>圖面設定</h2><span data-icon="sliders"></span></div>
               <div class="field"><label for="subtitle">副標題 <span class="optional">選填</span></label><textarea id="subtitle" rows="3" maxlength="240" placeholder="說明這份圖表的主題或範圍"></textarea></div>
               <div class="field"><label for="row-height">資料列間距</label><select id="row-height"><option value="36">緊湊 · 36 px</option><option value="48">標準 · 48 px</option><option value="60">寬鬆 · 60 px</option></select></div>
+              <div class="field"><label for="week-start">每週起始日</label><select id="week-start"><option value="1">星期一</option><option value="0">星期日</option></select></div>
+              <div class="field"><label for="snap-days">拖曳對齊</label><select id="snap-days"><option value="1">每天 · 1 天</option><option value="7">每週 · 7 天</option></select></div>
+              <label class="toggle-field" for="show-today"><span><strong>顯示今天</strong><small>在時間軸標出今天的位置</small></span><input id="show-today" type="checkbox" checked /></label>
+              <label class="toggle-field" for="show-grid"><span><strong>顯示日期格線</strong><small>協助對齊時段與日期</small></span><input id="show-grid" type="checkbox" checked /></label>
               <label class="toggle-field" for="show-notes"><span><strong>顯示說明欄</strong><small>在表格加入項目的文字說明</small></span><input id="show-notes" type="checkbox" /></label>
               <label class="toggle-field" for="show-weekends"><span><strong>顯示週末底色</strong><small>以淡色區分週六與週日</small></span><input id="show-weekends" type="checkbox" /></label>
               <div class="settings-section"><h3>文件保存</h3><p>編輯會自動保存在目前瀏覽器。下載 JSON，可在另一台裝置接續編輯。</p><button id="settings-save" class="button button-secondary full-width" type="button"><span data-icon="download"></span>下載可編輯的 JSON</button></div>
@@ -150,7 +179,8 @@
           </aside>
         </div>
 
-        <footer class="workspace-footer"><span>為清楚的時間表達而設計</span><span>pst v0.1 <span class="footer-dot">·</span> 資料保存在你的瀏覽器</span></footer>
+        <footer class="workspace-footer"><span>為清楚的時間表達而設計</span><span>pst v0.2 <span class="footer-dot">·</span> 資料保存在你的瀏覽器</span></footer>
+        <span id="layout-status" class="sr-only" role="status" aria-live="polite"></span>
       </main>
     </div>
 

@@ -97,6 +97,10 @@
     "dayWidth": 18,
     "rowHeight": 48,
     "showNotes": false,
-    "showWeekends": true
+    "showWeekends": true,
+    "weekStartsOn": 1,
+    "showToday": true,
+    "snapDays": 1,
+    "showGrid": true
   }
 }

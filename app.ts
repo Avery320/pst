@@ -1,6 +1,12 @@
 import './styles.css';
 import { TimelineChart } from './chart.ts';
 import {
+  countWeekdays, endOfMonth, endOfWeek, formatDateZh, formatWeekdayZh,
+  getISOWeek, localToday, shiftRange, startOfMonth, startOfWeek,
+} from './calendar.ts';
+import { attachDatePickers } from './calendar-picker.ts';
+import { setupWorkspaceLayout } from './layout.ts';
+import {
   DocumentHistory, addDays, cloneDocument, createDemoDocument, createEmptyDocument,
   daysBetween, getDocumentBounds, isValidDate, makeId, parseDocument,
   serializeDocument, validateDocument,
@@ -82,7 +88,25 @@ let chart: TimelineChart | null = null;
 let chartFrame = 0;
 let toastTimer = 0;
 let exporting = false;
+let dragging = false;
+let pendingScrollDate: string | null = null;
+let datePickers: ReturnType<typeof attachDatePickers> | null = null;
 const exportDialog = element<HTMLDialogElement>('export-dialog');
+
+function renderTimelineScroll(metrics = chart?.getScrollMetrics()): void {
+  const rail = element<HTMLInputElement>('timeline-scroll');
+  if (!metrics) { rail.disabled = true; return; }
+  rail.disabled = metrics.max <= 0;
+  rail.value = String(metrics.max > 0 ? Math.round(metrics.left / metrics.max * 1000) : 0);
+  const totalDays = daysBetween(state.view.start, state.view.end) + 1;
+  const startOffset = Math.min(totalDays - 1, Math.max(0, Math.floor(metrics.left / state.view.dayWidth)));
+  const endOffset = Math.min(totalDays - 1, Math.max(startOffset, Math.ceil((metrics.left + metrics.viewport) / state.view.dayWidth) - 1));
+  const start = addDays(state.view.start, startOffset);
+  const end = addDays(state.view.start, endOffset);
+  const label = `${start} — ${end}`;
+  element('timeline-scroll-label').textContent = label;
+  rail.setAttribute('aria-valuetext', `目前可見 ${label}`);
+}
 
 function toast(message: string, error = false): void {
   const target = element('toast');
@@ -129,9 +153,21 @@ function scheduleChart(): void {
           onNameChange: (id, name) => updateItem(id, { name }),
           onNoteChange: (id, note) => updateItem(id, { note }),
           onError: message => { toast(message, true); scheduleChart(); },
+          onScrollChange: renderTimelineScroll,
+          onDragStateChange: active => {
+            dragging = active;
+            element('drag-status').textContent = active
+              ? `對齊 ${state.view.snapDays} 天格點 · 放開套用 · Esc 取消`
+              : `對齊 ${state.view.snapDays} 天格點 · 拖動時預覽落點`;
+          },
         });
         if (selectedId) chart.selectItem(selectedId);
       }
+      if (pendingScrollDate) {
+        chart.scrollToDate(pendingScrollDate);
+        pendingScrollDate = null;
+      }
+      renderTimelineScroll();
       element('chart-error').hidden = true;
     } catch (error) {
       element('chart-error').hidden = false;
@@ -184,6 +220,7 @@ function currentItem(): TimelineItem | undefined {
 }
 
 function setTab(tab: 'item' | 'markers' | 'settings', focus = false): void {
+  datePickers?.close();
   for (const name of ['item', 'markers', 'settings']) {
     const button = element(`tab-${name}`);
     const active = name === tab;
@@ -218,7 +255,7 @@ function renderItem(): void {
   element('item-fields').hidden = !item;
   element('no-selection').hidden = Boolean(item);
   element('item-kind-badge').hidden = !item;
-  if (!item) return;
+  if (!item) { datePickers?.refresh(); return; }
   element('item-kind-badge').textContent = item.type === 'milestone' ? '里程碑' : '時段';
   element<HTMLInputElement>('item-name').value = item.name;
   element<HTMLSelectElement>('item-type').value = item.type;
@@ -226,7 +263,11 @@ function renderItem(): void {
   const end = element<HTMLInputElement>('item-end');
   end.value = item.end;
   end.disabled = item.type === 'milestone';
-  element('item-duration').textContent = item.type === 'milestone' ? '單一日期的節點標記' : `共 ${daysBetween(item.start, item.end) + 1} 天（包含起訖日）`;
+  element('item-duration').textContent = item.type === 'milestone'
+    ? formatDateZh(item.start)
+    : `${formatWeekdayZh(item.start)} → ${formatWeekdayZh(item.end)} · 共 ${daysBetween(item.start, item.end) + 1} 天 · 週一至週五 ${countWeekdays(item.start, item.end)} 天`;
+  element<HTMLInputElement>('item-start').title = formatDateZh(item.start);
+  end.title = formatDateZh(item.end);
   element<HTMLInputElement>('item-color').value = item.color;
   element<HTMLTextAreaElement>('item-note').value = item.note;
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-color]')) {
@@ -236,6 +277,7 @@ function renderItem(): void {
   element<HTMLButtonElement>('move-up').disabled = index === 0;
   element<HTMLButtonElement>('move-down').disabled = index === state.items.length - 1;
   element<HTMLButtonElement>('duplicate-item').disabled = state.items.length >= 200;
+  datePickers?.refresh();
 }
 
 function renderMarkers(): void {
@@ -260,7 +302,7 @@ function renderMarkers(): void {
     const label = document.createElement('strong');
     label.textContent = marker.label;
     const date = document.createElement('small');
-    date.textContent = marker.date.replaceAll('-', '.');
+    date.textContent = `${marker.date.replaceAll('-', '.')} ${formatWeekdayZh(marker.date)}`;
     edit.append(label, date);
     edit.setAttribute('aria-label', `編輯標記：${marker.label}，${marker.date}`);
     edit.addEventListener('click', () => fillMarkerEditor(marker));
@@ -285,6 +327,7 @@ function resetMarkerEditor(): void {
   element('marker-form-heading').textContent = '新增標記';
   element('save-marker-label').textContent = '新增標記';
   element('cancel-marker').hidden = true;
+  datePickers?.refresh();
 }
 
 function fillMarkerEditor(marker: DateMarker): void {
@@ -296,6 +339,7 @@ function fillMarkerEditor(marker: DateMarker): void {
   element('save-marker-label').textContent = '儲存標記';
   element('cancel-marker').hidden = false;
   renderMarkers();
+  datePickers?.refresh();
   element('marker-label').focus();
 }
 
@@ -309,6 +353,8 @@ function render(): void {
   element<HTMLInputElement>('view-end').value = state.view.end;
   element<HTMLInputElement>('zoom').value = String(state.view.dayWidth);
   element<HTMLOutputElement>('zoom-value').value = `${state.view.dayWidth}px`;
+  element<HTMLButtonElement>('zoom-out').disabled = state.view.dayWidth <= 1;
+  element<HTMLButtonElement>('zoom-in').disabled = state.view.dayWidth >= 80;
   element<HTMLButtonElement>('undo').disabled = !history.canUndo;
   element<HTMLButtonElement>('redo').disabled = !history.canRedo;
   element<HTMLButtonElement>('add-task').disabled = state.items.length >= 200;
@@ -328,6 +374,24 @@ function render(): void {
   rowHeight.value = String(state.view.rowHeight);
   element<HTMLInputElement>('show-notes').checked = state.view.showNotes;
   element<HTMLInputElement>('show-weekends').checked = state.view.showWeekends;
+  element<HTMLSelectElement>('week-start').value = String(state.view.weekStartsOn);
+  element<HTMLInputElement>('show-today').checked = state.view.showToday;
+  element<HTMLInputElement>('show-grid').checked = state.view.showGrid;
+  element<HTMLSelectElement>('snap-days').value = String(state.view.snapDays);
+  element('drag-status').textContent = `對齊 ${state.view.snapDays} 天格點 · 拖動時預覽落點`;
+  const isoWeek = getISOWeek(state.view.start);
+  element('calendar-summary').textContent = `${formatWeekdayZh(state.view.start)} — ${formatWeekdayZh(state.view.end)} · ${daysBetween(state.view.start, state.view.end) + 1} 天 · ${state.view.weekStartsOn === 1 ? '週一' : '週日'}起算`;
+  element('calendar-summary').title = `${formatDateZh(state.view.start)} 至 ${formatDateZh(state.view.end)}；起日為 ISO ${isoWeek.year}-W${String(isoWeek.week).padStart(2, '0')}`;
+  element<HTMLInputElement>('view-start').title = formatDateZh(state.view.start);
+  element<HTMLInputElement>('view-end').title = formatDateZh(state.view.end);
+  for (const [id, amount] of [['range-prev', -1], ['range-next', 1]] as const) {
+    const next = shiftRange(state.view, state.view.scale, amount);
+    const button = element<HTMLButtonElement>(id);
+    const label = `${amount < 0 ? '往前' : '往後'}一${{ day: '天', week: '週', month: '月' }[state.view.scale]}`;
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.disabled = next.start === state.view.start && next.end === state.view.end;
+  }
   element('empty-chart').hidden = state.items.length > 0;
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-scale]')) {
     button.setAttribute('aria-pressed', String(button.dataset.scale === state.view.scale));
@@ -338,12 +402,12 @@ function render(): void {
   if (editingMarkerId && !state.markers.some(marker => marker.id === editingMarkerId)) resetMarkerEditor();
   renderItem();
   renderMarkers();
+  datePickers?.refresh();
   scheduleChart();
 }
 
 function addItem(type: TimelineItem['type']): void {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = localToday();
   const start = today >= state.view.start && today <= state.view.end ? today : state.view.start;
   let end = start;
   if (type === 'task') {
@@ -364,7 +428,7 @@ function addItem(type: TimelineItem['type']): void {
 }
 
 function restoreHistory(direction: 'undo' | 'redo'): void {
-  if (exporting) return;
+  if (exporting || dragging) return;
   state = direction === 'undo' ? history.undo() : history.redo();
   resetMarkerEditor();
   render();
@@ -500,9 +564,54 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]')) {
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-scale]')) {
   button.addEventListener('click', () => {
     const scale = button.dataset.scale as TimelineDocument['view']['scale'];
-    editDocument(draft => { draft.view.scale = scale; draft.view.dayWidth = { day: 30, week: 18, month: 12 }[scale]; });
+    editDocument(draft => { draft.view.scale = scale; draft.view.dayWidth = { day: 30, week: 14, month: 4 }[scale]; });
   });
 }
+
+function fittedDayWidth(start: string, end: string): number {
+  const available = chart?.getScrollMetrics().viewport || Math.max(120, element('chart').clientWidth - 420);
+  return Math.max(1, Math.min(80, Math.floor(available / (daysBetween(start, end) + 1))));
+}
+
+function showRange(start: string, end: string, scale?: TimelineDocument['view']['scale'], fit = false, focusDate = start): void {
+  if (dragging) return;
+  if (editDocument(draft => {
+    draft.view.start = start;
+    draft.view.end = end;
+    if (scale) draft.view.scale = scale;
+    if (fit) draft.view.dayWidth = fittedDayWidth(start, end);
+  })) pendingScrollDate = focusDate;
+}
+
+for (const [id, amount] of [['range-prev', -1], ['range-next', 1]] as const) {
+  element(id).addEventListener('click', () => {
+    const range = shiftRange(state.view, state.view.scale, amount);
+    showRange(range.start, range.end);
+  });
+}
+element('range-today').addEventListener('click', () => {
+  if (dragging) return;
+  const today = localToday();
+  if (today >= state.view.start && today <= state.view.end) {
+    chart?.scrollToDate(today);
+    return;
+  }
+  const shift = daysBetween(state.view.start, today) - Math.floor(daysBetween(state.view.start, state.view.end) / 2);
+  const range = shiftRange(state.view, 'day', shift);
+  showRange(range.start, range.end, undefined, false, today);
+});
+element('range-week').addEventListener('click', () => {
+  const today = localToday();
+  showRange(startOfWeek(today, state.view.weekStartsOn), endOfWeek(today, state.view.weekStartsOn), 'day', true);
+});
+element('range-month').addEventListener('click', () => {
+  const today = localToday();
+  showRange(startOfMonth(today), endOfMonth(today), 'day', true);
+});
+element('range-year').addEventListener('click', () => {
+  const year = localToday().slice(0, 4);
+  showRange(`${year}-01-01`, `${year}-12-31`, 'month', true);
+});
 
 element('document-title').addEventListener('change', () => editDocument(draft => { draft.title = element<HTMLInputElement>('document-title').value.trim(); }));
 element('subtitle').addEventListener('change', () => editDocument(draft => { draft.subtitle = element<HTMLTextAreaElement>('subtitle').value; }));
@@ -510,6 +619,10 @@ for (const id of ['view-start', 'view-end']) {
   element(id).addEventListener('change', () => editDocument(draft => {
     draft.view.start = element<HTMLInputElement>('view-start').value;
     draft.view.end = element<HTMLInputElement>('view-end').value;
+    if (isValidDate(draft.view.start) && isValidDate(draft.view.end) && draft.view.start > draft.view.end) {
+      if (id === 'view-start') draft.view.end = draft.view.start;
+      else draft.view.start = draft.view.end;
+    }
   }));
 }
 element('fit-range').addEventListener('click', () => editDocument(draft => {
@@ -523,12 +636,29 @@ element('fit-range').addEventListener('click', () => editDocument(draft => {
   }
   draft.view.start = start;
   draft.view.end = end;
+  draft.view.dayWidth = fittedDayWidth(start, end);
 }));
 element('zoom').addEventListener('input', () => { element<HTMLOutputElement>('zoom-value').value = `${element<HTMLInputElement>('zoom').value}px`; });
 element('zoom').addEventListener('change', () => editDocument(draft => { draft.view.dayWidth = Number(element<HTMLInputElement>('zoom').value); }));
+for (const [id, delta] of [['zoom-out', -1], ['zoom-in', 1]] as const) {
+  element(id).addEventListener('click', () => editDocument(draft => {
+    const step = draft.view.dayWidth < 10 ? 1 : 4;
+    draft.view.dayWidth = Math.max(1, Math.min(80, draft.view.dayWidth + delta * step));
+  }));
+}
+element('fit-width').addEventListener('click', () => {
+  editDocument(draft => { draft.view.dayWidth = fittedDayWidth(draft.view.start, draft.view.end); });
+});
+element('timeline-scroll').addEventListener('input', () => {
+  chart?.setHorizontalScroll(Number(element<HTMLInputElement>('timeline-scroll').value) / 1000);
+});
 element('row-height').addEventListener('change', () => editDocument(draft => { draft.view.rowHeight = Number(element<HTMLSelectElement>('row-height').value); }));
 element('show-notes').addEventListener('change', () => editDocument(draft => { draft.view.showNotes = element<HTMLInputElement>('show-notes').checked; }));
 element('show-weekends').addEventListener('change', () => editDocument(draft => { draft.view.showWeekends = element<HTMLInputElement>('show-weekends').checked; }));
+element('week-start').addEventListener('change', () => editDocument(draft => { draft.view.weekStartsOn = Number(element<HTMLSelectElement>('week-start').value) as 0 | 1; }));
+element('snap-days').addEventListener('change', () => editDocument(draft => { draft.view.snapDays = Number(element<HTMLSelectElement>('snap-days').value) as 1 | 7; }));
+element('show-today').addEventListener('change', () => editDocument(draft => { draft.view.showToday = element<HTMLInputElement>('show-today').checked; }));
+element('show-grid').addEventListener('change', () => editDocument(draft => { draft.view.showGrid = element<HTMLInputElement>('show-grid').checked; }));
 element('undo').addEventListener('click', () => restoreHistory('undo'));
 element('redo').addEventListener('click', () => restoreHistory('redo'));
 element('add-task').addEventListener('click', () => addItem('task'));
@@ -544,7 +674,11 @@ element('item-start').addEventListener('change', () => {
   const start = element<HTMLInputElement>('item-start').value;
   if (item) updateItem(selectedId, { start, end: isValidDate(start) && start > item.end ? start : item.end });
 });
-element('item-end').addEventListener('change', () => updateItem(selectedId, { end: element<HTMLInputElement>('item-end').value }));
+element('item-end').addEventListener('change', () => {
+  const item = currentItem();
+  const end = element<HTMLInputElement>('item-end').value;
+  if (item) updateItem(selectedId, { start: isValidDate(end) && end < item.start ? end : item.start, end });
+});
 for (const [id, direction] of [['move-up', -1], ['move-down', 1]] as const) {
   element(id).addEventListener('click', () => editDocument(draft => {
     const index = draft.items.findIndex(item => item.id === selectedId);
@@ -647,7 +781,7 @@ element('retry-chart').addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', event => {
-  if (exportDialog.open || !(event.metaKey || event.ctrlKey)) return;
+  if (document.querySelector('dialog[open]') || !(event.metaKey || event.ctrlKey)) return;
   if (event.key.toLowerCase() === 's') {
     event.preventDefault(); downloadDocument(); return;
   }
@@ -697,6 +831,8 @@ document.addEventListener('input', event => {
   }
 });
 
+datePickers = attachDatePickers(document.body, { getWeekStartsOn: () => state.view.weekStartsOn });
+setupWorkspaceLayout(() => chart?.resize());
 resetMarkerEditor();
 render();
 saveLocally();

@@ -165,10 +165,37 @@ test("document text limits and required display settings are enforced", () => {
   }
   assert.throws(() => validateDocument({ ...original, markers: [{ ...original.markers[0], label: "x".repeat(121) }] }), /120/u);
   for (const patch of [
-    { scale: "year" }, { dayWidth: 11 }, { dayWidth: 81 }, { dayWidth: NaN },
+    { scale: "year" }, { dayWidth: 0 }, { dayWidth: 81 }, { dayWidth: NaN },
     { rowHeight: 31 }, { rowHeight: 65 }, { rowHeight: Infinity },
     { showNotes: "true" }, { showWeekends: 1 },
   ]) assert.throws(() => validateDocument({ ...original, view: { ...original.view, ...patch } }));
+});
+
+test("schema-1 legacy documents gain calendar defaults without losing their content", () => {
+  const current = fixture();
+  const legacyView: Record<string, unknown> = { ...current.view };
+  for (const key of ['weekStartsOn', 'showToday', 'snapDays', 'showGrid']) delete legacyView[key];
+  const migrated = parseDocument(JSON.stringify({ ...current, view: legacyView }));
+  assert.deepEqual(migrated, current);
+  assert.equal(migrated.schemaVersion, 1);
+  assert.deepEqual(parseDocument(serializeDocument(migrated)), current);
+  const customized = {
+    ...current,
+    view: { ...current.view, weekStartsOn: 0 as const, showToday: false, snapDays: 7 as const, showGrid: false, dayWidth: 1 },
+  };
+  assert.deepEqual(validateDocument(customized), customized);
+});
+
+test("explicit malformed calendar settings are not replaced by migration defaults", () => {
+  const doc = fixture();
+  for (const patch of [
+    { weekStartsOn: 2 }, { weekStartsOn: '1' }, { weekStartsOn: null }, { weekStartsOn: undefined },
+    { snapDays: 0 }, { snapDays: 2 }, { snapDays: '7' }, { snapDays: undefined },
+    { showToday: 1 }, { showToday: null }, { showGrid: 'false' }, { showGrid: undefined },
+  ]) assert.throws(() => validateDocument({ ...doc, view: { ...doc.view, ...patch } }));
+  const accessorView = { ...doc.view };
+  Object.defineProperty(accessorView, 'weekStartsOn', { get() { throw new Error('getter must not run'); } });
+  assert.throws(() => validateDocument({ ...doc, view: accessorView }), /缺少有效/u);
 });
 
 test("row, marker and viewport limits accept their boundary and reject overflow", () => {

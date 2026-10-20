@@ -1,8 +1,15 @@
 import { Gantt, TYPES, VRender, VTable, TABLE_EVENT_TYPE } from '@visactor/vtable-gantt';
 import type { ColumnsDefine, GanttConstructorOptions } from '@visactor/vtable-gantt';
 import { InputEditor, TextAreaEditor } from '@visactor/vtable-editors';
-import { resolveChartDates } from './chart-dates.ts';
+import { normalizeChartDate } from './chart-dates.ts';
+import { daysBetween, isValidDate } from './model.ts';
+import { formatWeekdayZh, getISOWeek, localToday } from './calendar.ts';
+import { TimelineInteraction, preserveCalendarScroll, scrollRatioToLeft } from './chart-interaction.ts';
+import type { InteractionGeometry } from './chart-interaction.ts';
 import type { TimelineDocument, TimelineItem } from './model.ts';
+import './chart-interaction.css';
+
+export interface ScrollMetrics { left: number; max: number; viewport: number; total: number }
 
 export interface TimelineChartCallbacks {
   onSelect(id: string): void;
@@ -10,6 +17,8 @@ export interface TimelineChartCallbacks {
   onNameChange(id: string, name: string): void;
   onNoteChange(id: string, note: string): void;
   onError(message: string): void;
+  onScrollChange?(metrics: ScrollMetrics): void;
+  onDragStateChange?(active: boolean): void;
 }
 
 type ChartRecord = TimelineItem & { _ganttStart: string; _ganttEnd: string };
@@ -24,6 +33,8 @@ let editorsRegistered = false;
 // VTable parses task dates as local civil dates. ISO date-only strings are UTC
 // in JavaScript and shift a day west of UTC, so only the adapter uses slashes.
 const toChartDate = (date: string): string => date.replaceAll('-', '/');
+const headerCalendarDate = (date: Date): string => date.getFullYear() < 1900 ? '1900-01-01'
+  : date.getFullYear() > 2100 ? '2100-12-31' : normalizeChartDate(date);
 
 /** The only layer that knows VTable's mutable records and rendering APIs. */
 export class TimelineChart {
@@ -33,13 +44,18 @@ export class TimelineChart {
   private document: TimelineDocument;
   private selectedId: string | undefined;
   private observer: ResizeObserver | undefined;
+  private paneObserver: ResizeObserver | undefined;
+  private interaction: TimelineInteraction | undefined;
+  private readonly abort = new AbortController();
   private resizeFrame = 0;
+  private overlayFrame = 0;
   private lastWidth = 0;
   private lastHeight = 0;
   private destroyed = false;
   private exporting = false;
   private updateAfterExport = false;
-  private pendingDateChange: { id: string; moved: boolean } | undefined;
+  private tableWidthOverride: number | undefined;
+  private dividerDragging = false;
   private readonly markerLabelJobs = new WeakSet<Gantt>();
 
   constructor(container: HTMLElement, doc: TimelineDocument, callbacks: TimelineChartCallbacks) {
@@ -54,6 +70,37 @@ export class TimelineChart {
     this.gantt = new Gantt(container, this.makeOptions());
     this.gantt.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.bindEvents();
+    this.interaction = new TimelineInteraction({
+      container, getItems: () => this.document.items, getSelectedId: () => this.selectedId,
+      getGeometry: () => this.getInteractionGeometry(),
+      getItemRect: index => this.gantt.getTaskBarRelativeRect(index),
+      scrollBy: (dx, dy = 0) => {
+        const before = { left: this.gantt.scrollLeft, top: this.gantt.scrollTop };
+        this.gantt.scrollLeft = before.left + dx;
+        this.gantt.scrollTop = before.top + dy;
+        this.interaction?.refresh();
+        this.notifyScroll();
+        return before.left !== this.gantt.scrollLeft || before.top !== this.gantt.scrollTop;
+      },
+      beforeStart: () => this.gantt.taskListTableInstance?.completeEditCell(),
+      onSelect: id => { this.selectItem(id); this.callbacks.onSelect(id); },
+      onCommit: (id, start, end) => this.defer(() => this.callbacks.onDatesChange(id, start, end)),
+      onStateChange: active => this.callbacks.onDragStateChange?.(active),
+      onError: message => this.callbacks.onError(message)
+    });
+    this.bindDivider();
+    this.paneObserver = new ResizeObserver(() => {
+      if (this.destroyed || this.overlayFrame) return;
+      this.overlayFrame = requestAnimationFrame(() => {
+        this.overlayFrame = 0;
+        if (this.destroyed) return;
+        if (this.dividerDragging) this.tableWidthOverride = this.gantt.taskTableWidth;
+        this.interaction?.refresh();
+        this.updateDividerAria();
+        this.notifyScroll();
+      });
+    });
+    this.paneObserver.observe(this.gantt.getElement());
     this.lastWidth = container.clientWidth;
     this.lastHeight = container.clientHeight;
     this.observer = new ResizeObserver(() => {
@@ -64,10 +111,14 @@ export class TimelineChart {
       });
     });
     this.observer.observe(container);
+    queueMicrotask(() => { if (!this.destroyed) this.notifyScroll(); });
   }
 
   update(doc: TimelineDocument, selectedId?: string): void {
     if (this.destroyed) return;
+    this.interaction?.cancel();
+    const oldView = { ...this.document.view };
+    const oldMetrics = this.getScrollMetrics();
     this.document = structuredClone(doc);
     if (selectedId !== undefined) this.selectedId = selectedId;
     if (!this.document.items.some(item => item.id === this.selectedId)) this.selectedId = undefined;
@@ -75,7 +126,8 @@ export class TimelineChart {
       this.updateAfterExport = true;
       return;
     }
-    this.rebuild();
+    this.rebuild({ start: oldView.start, dayWidth: oldView.dayWidth,
+      left: oldMetrics.left, viewport: Math.min(oldMetrics.viewport, oldMetrics.total) });
   }
 
   selectItem(id: string): void {
@@ -86,6 +138,7 @@ export class TimelineChart {
 
   resize(): void {
     if (this.destroyed || !this.container.clientWidth || !this.container.clientHeight) return;
+    this.interaction?.cancel();
     if (this.exporting) {
       this.updateAfterExport = true;
       return;
@@ -100,11 +153,38 @@ export class TimelineChart {
 
   async flushEdits(): Promise<void> {
     if (this.destroyed) return;
+    this.interaction?.cancel();
     this.gantt.taskListTableInstance?.completeEditCell();
     await Promise.resolve();
     // The app batches validated model changes into an animation-frame render.
     // Register after the change callback, so JSON and image exports see that render.
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  }
+
+  getScrollMetrics(): ScrollMetrics {
+    const total = Math.max(0, this.gantt.getAllDateColsWidth());
+    // Gantt.tableNoFrameWidth is itself capped to the date width upstream. The
+    // public viewport must expose available pane space so "fit width" can grow.
+    const viewport = Math.max(0, this.gantt.getElement().clientWidth - 12 - this.gantt.tableX);
+    const max = Math.max(0, total - viewport);
+    return { left: Math.max(0, Math.min(max, this.gantt.scrollLeft)), max, viewport, total };
+  }
+
+  setHorizontalScroll(ratio: number): void {
+    if (this.destroyed) return;
+    this.gantt.scrollLeft = scrollRatioToLeft(ratio, this.getScrollMetrics().max);
+    this.interaction?.refresh();
+    this.notifyScroll();
+  }
+
+  scrollToDate(date: string): void {
+    if (this.destroyed) return;
+    if (!isValidDate(date)) throw new Error('要定位的日期無效。');
+    const metrics = this.getScrollMetrics();
+    const x = (daysBetween(this.document.view.start, date) + 0.5) * this.document.view.dayWidth;
+    this.gantt.scrollLeft = Math.max(0, Math.min(metrics.max, x - metrics.viewport / 2));
+    this.interaction?.refresh();
+    this.notifyScroll();
   }
 
   async exportPng(scale: 1 | 2): Promise<string> {
@@ -128,6 +208,10 @@ export class TimelineChart {
     const plugin = new ExportGanttPlugin();
     plugin.run(this.gantt);
     this.exporting = true;
+    const interactiveScrollStyle = this.gantt.options.scrollStyle;
+    // The original's parsed scroll style is independent (verified in 1.26.8).
+    // Only the full-size clone receives hidden, non-reserving rails.
+    this.gantt.options.scrollStyle = { ...interactiveScrollStyle, visible: 'none', hoverOn: true };
     try {
       // The official plugin clones all columns, all rows and the full date range.
       // It creates a fresh table selection; the grid callback also excludes clones.
@@ -140,6 +224,7 @@ export class TimelineChart {
       throw new Error(`PNG 匯出失敗：${error instanceof Error ? error.message : '請稍後重試。'}`);
     } finally {
       plugin.release();
+      this.gantt.options.scrollStyle = interactiveScrollStyle;
       this.exporting = false;
       if (this.updateAfterExport && !this.destroyed) {
         this.updateAfterExport = false;
@@ -151,8 +236,12 @@ export class TimelineChart {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.interaction?.destroy();
+    this.abort.abort();
     this.observer?.disconnect();
+    this.paneObserver?.disconnect();
     if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
+    if (this.overlayFrame) cancelAnimationFrame(this.overlayFrame);
     this.gantt.release();
   }
 
@@ -167,31 +256,13 @@ export class TimelineChart {
   }
 
   private bindEvents(): void {
+    this.gantt.on(TYPES.GANTT_EVENT_TYPE.SCROLL, () => {
+      this.interaction?.refresh();
+      this.notifyScroll();
+    });
     this.gantt.on(TYPES.GANTT_EVENT_TYPE.CLICK_TASK_BAR, ({ record }) => {
       const id = String(record.id);
       this.defer(() => { this.selectItem(id); this.callbacks.onSelect(id); });
-    });
-    this.gantt.on(TYPES.GANTT_EVENT_TYPE.CHANGE_DATE_RANGE, ({ record, startDate, endDate, oldStartDate }) => {
-      // 1.26.8's event types say Date, but runtime normally sends formatted strings.
-      const id = String(record.id);
-      const original = this.document.items.find(item => item.id === id);
-      const rawStart = record._ganttStart ?? startDate;
-      const rawEnd = record._ganttEnd ?? endDate;
-      const change = { id, moved: false };
-      this.pendingDateChange = change;
-      this.defer(() => {
-        if (this.pendingDateChange === change) this.pendingDateChange = undefined;
-        if (!original) return;
-        const { start, end } = resolveChartDates({ original, start: rawStart, end: rawEnd,
-          oldVisibleStart: oldStartDate, isMove: change.moved });
-        this.selectItem(id);
-        this.callbacks.onSelect(id);
-        this.callbacks.onDatesChange(id, start, end);
-      });
-    });
-    this.gantt.on(TYPES.GANTT_EVENT_TYPE.MOVE_END_TASK_BAR, ({ record }) => {
-      // Emitted synchronously after change_date_range for whole-bar moves only.
-      if (this.pendingDateChange?.id === String(record.id)) this.pendingDateChange.moved = true;
     });
     const table = this.gantt.taskListTableInstance;
     table?.on(TABLE_EVENT_TYPE.CLICK_CELL, ({ col, row }) => {
@@ -218,16 +289,23 @@ export class TimelineChart {
     });
   }
 
-  private rebuild(): void {
-    const left = this.gantt.scrollLeft;
+  private rebuild(anchor?: { start: string; dayWidth: number; left: number; viewport: number }): void {
+    const metrics = this.getScrollMetrics();
+    const previous = anchor ?? { start: this.document.view.start, dayWidth: this.document.view.dayWidth,
+      left: this.gantt.scrollLeft, viewport: Math.min(metrics.viewport, metrics.total) };
     const top = this.gantt.scrollTop;
     const tableLeft = this.gantt.taskListTableInstance?.scrollLeft ?? 0;
     this.gantt.updateOption(this.makeOptions());
     this.gantt.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.gantt.scrollLeft = left;
+    this.gantt.scrollLeft = preserveCalendarScroll({ oldStart: previous.start, newStart: this.document.view.start,
+      oldDayWidth: previous.dayWidth, newDayWidth: this.document.view.dayWidth,
+      oldLeft: previous.left, oldViewport: previous.viewport,
+      newViewport: this.getScrollMetrics().viewport, totalWidth: this.gantt.getAllDateColsWidth() });
     this.gantt.scrollTop = top;
     if (this.gantt.taskListTableInstance) this.gantt.taskListTableInstance.scrollLeft = tableLeft;
     this.paintSelection(true);
+    this.updateDividerAria();
+    this.notifyScroll();
   }
 
   private paintSelection(selectTableCell: boolean): void {
@@ -243,6 +321,65 @@ export class TimelineChart {
     this.gantt.scenegraph.grid.setX(-this.gantt.scrollLeft);
     this.gantt.scenegraph.grid.setY(-this.gantt.scrollTop);
     this.gantt.scenegraph.updateNextFrame();
+    this.interaction?.refresh();
+  }
+
+  private notifyScroll(): void {
+    if (!this.destroyed) this.callbacks.onScrollChange?.(this.getScrollMetrics());
+  }
+
+  private getInteractionGeometry(): InteractionGeometry {
+    const chartRect = this.container.getBoundingClientRect();
+    const canvasRect = this.gantt.canvas.getBoundingClientRect();
+    const left = canvasRect.left - chartRect.left + this.gantt.tableX;
+    const top = canvasRect.top - chartRect.top + this.gantt.tableY + this.gantt.getAllHeaderRowsHeight();
+    const metrics = this.getScrollMetrics();
+    return { left, top, width: Math.min(metrics.viewport, metrics.total),
+      height: Math.max(0, this.gantt.tableNoFrameHeight - this.gantt.getAllHeaderRowsHeight()),
+      clientLeft: chartRect.left + left, clientTop: chartRect.top + top,
+      scrollLeft: this.gantt.scrollLeft, dayWidth: this.document.view.dayWidth,
+      rowHeight: this.document.view.rowHeight, rangeStart: this.document.view.start,
+      rangeEnd: this.document.view.end, snapDays: this.document.view.snapDays };
+  }
+
+  private bindDivider(): void {
+    const divider = this.gantt.verticalSplitResizeLine;
+    divider.classList.add('pst-chart-divider');
+    divider.setAttribute('role', 'separator');
+    divider.setAttribute('aria-label', '調整表格與時間軸寬度');
+    divider.setAttribute('aria-orientation', 'vertical');
+    divider.title = '拖曳調整表格與時間軸寬度；方向鍵可微調';
+    divider.tabIndex = 0;
+    const options = { signal: this.abort.signal };
+    divider.addEventListener('pointerdown', () => {
+      this.interaction?.cancel();
+      this.gantt.taskListTableInstance?.completeEditCell();
+      this.dividerDragging = true;
+    }, options);
+    window.addEventListener('pointerup', () => {
+      if (!this.dividerDragging) return;
+      this.dividerDragging = false;
+      this.tableWidthOverride = this.gantt.taskTableWidth;
+      this.interaction?.refresh();
+      this.updateDividerAria();
+      this.notifyScroll();
+    }, options);
+    divider.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      this.interaction?.cancel();
+      this.tableWidthOverride = this.gantt.taskTableWidth + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 40 : 12);
+      this.rebuild();
+    }, options);
+    this.updateDividerAria();
+  }
+
+  private updateDividerAria(): void {
+    const divider = this.gantt.verticalSplitResizeLine;
+    divider.setAttribute('aria-valuenow', String(Math.round(this.gantt.taskTableWidth)));
+    divider.setAttribute('aria-valuemin', String(this.gantt.options.taskListTable?.minTableWidth ?? 140));
+    divider.setAttribute('aria-valuemax', String(this.gantt.options.taskListTable?.maxTableWidth ?? 584));
+    divider.setAttribute('aria-valuetext', `表格寬度 ${Math.round(this.gantt.taskTableWidth)} 像素`);
   }
 
   private scheduleMarkerLabels(instance: Gantt): void {
@@ -292,7 +429,11 @@ export class TimelineChart {
       style: { fontSize: 11, color: '#76858b', autoWrapText: true, lineClamp: 2 }
     });
     const totalTableWidth = view.showNotes ? 584 : 384;
-    const tableWidth = Math.min(totalTableWidth, Math.max(150, Math.floor((this.container.clientWidth || 1100) * 0.48)));
+    const containerWidth = this.container.clientWidth || 1100;
+    const minTableWidth = Math.min(140, Math.max(80, Math.floor(containerWidth * 0.35)));
+    const maxTableWidth = Math.max(minTableWidth, Math.min(totalTableWidth, containerWidth - 120));
+    const tableWidth = Math.max(minTableWidth, Math.min(maxTableWidth,
+      this.tableWidthOverride ?? Math.floor(containerWidth * 0.48)));
     const headerStyle: TYPES.ITimelineHeaderStyle = {
       fontSize: 11, fontWeight: '500', color: '#667c72', textAlign: 'center', padding: [0, 7, 0, 7]
     };
@@ -301,14 +442,46 @@ export class TimelineChart {
       format: ({ startDate }) => `${startDate.getFullYear()} 年 ${startDate.getMonth() + 1} 月`
     };
     const day: TYPES.ITimelineScale = {
-      unit: 'day', step: 1, rowHeight: 29, style: { ...headerStyle, fontSize: 10 },
-      format: ({ startDate }) => String(startDate.getDate())
+      unit: 'day', step: 1, rowHeight: 36, style: { ...headerStyle, fontSize: 10 },
+      format: ({ startDate }) => `${startDate.getDate()} ${formatWeekdayZh(headerCalendarDate(startDate))}`,
+      customLayout: ({ width, height, index, startDate }) => {
+        const rootContainer = new VRender.Group({ width, height, pickable: false });
+        const stride = view.dayWidth >= 14 ? 1 : Math.ceil(28 / view.dayWidth);
+        if (index % stride === 0) {
+          const iso = headerCalendarDate(startDate);
+          const weekday = formatWeekdayZh(iso);
+          const text = view.dayWidth >= 14
+            ? [String(startDate.getDate()), view.dayWidth >= 28 ? weekday : weekday.replace('週', '')]
+            : [`${startDate.getMonth() + 1}/${startDate.getDate()}`];
+          rootContainer.appendChild(new VRender.Text({ x: width / 2, y: height / 2, text,
+            fontFamily: FONT, fontSize: 9, lineHeight: 13, textAlign: 'center', textBaseline: 'middle',
+            fill: [0, 6].includes(startDate.getDay()) ? '#aa8069' : '#65786e',
+            maxLineWidth: Math.max(width, view.dayWidth * stride) - 1 }));
+        }
+        return { rootContainer, renderDefaultText: false };
+      }
     };
     // Hidden day scales preserve calendar-day geometry and drag precision in all views.
     const scales: TYPES.ITimelineScale[] = view.scale === 'day' ? [month, day]
       : view.scale === 'week' ? [month, {
-        unit: 'week', step: 1, startOfWeek: 'monday', rowHeight: 29, style: headerStyle,
-        format: ({ startDate }) => `${startDate.getMonth() + 1}/${startDate.getDate()}`
+        unit: 'week', step: 1, startOfWeek: view.weekStartsOn === 0 ? 'sunday' : 'monday',
+        rowHeight: 29, style: headerStyle,
+        customLayout: ({ width, height, index, startDate, endDate }) => {
+          const rootContainer = new VRender.Group({ width, height, pickable: false });
+          const stride = Math.max(1, Math.ceil(66 / (view.dayWidth * 7)));
+          if (index % stride === 0) {
+            const first = getISOWeek(headerCalendarDate(startDate));
+            const last = getISOWeek(headerCalendarDate(endDate));
+            // A Sunday–Saturday range spans two ISO (Monday-based) weeks.
+            const week = first.week === last.week && first.year === last.year
+              ? `W${first.week}` : `W${first.week}–${last.week}`;
+            rootContainer.appendChild(new VRender.Text({ x: 5, y: height / 2,
+              text: `${startDate.getMonth() + 1}/${startDate.getDate()} · ${week}`,
+              fontFamily: FONT, fontSize: 10, fill: '#65786e', textAlign: 'left', textBaseline: 'middle',
+              maxLineWidth: Math.max(width, view.dayWidth * 7 * stride) - 8, ellipsis: '…' }));
+          }
+          return { rootContainer, renderDefaultText: false };
+        }
       }, { ...day, visible: false }]
         : [{ unit: 'year', step: 1, rowHeight: 29, style: headerStyle,
           format: ({ startDate }) => `${startDate.getFullYear()} 年` },
@@ -329,7 +502,7 @@ export class TimelineChart {
       // ExportGanttPlugin sets its requested ratio before taking the final image.
       pixelRatio: 1,
       taskListTable: {
-        columns, tableWidth, editCellTrigger: 'doubleclick',
+        columns, tableWidth, minTableWidth, maxTableWidth, editCellTrigger: 'doubleclick',
         dragHeaderMode: 'none', columnResizeMode: 'none',
         autoWrapText: false,
         select: { highlightMode: 'row', disableHeaderSelect: true, disableDragSelect: true,
@@ -353,15 +526,23 @@ export class TimelineChart {
       grid: {
         backgroundColor: '#ffffff',
         weekendBackgroundColor: view.showWeekends ? '#f5f7f5' : '#ffffff',
-        horizontalLine: { lineColor: BORDER, lineWidth: 1 },
-        verticalLine: { lineColor: '#edf0ed', lineWidth: 1 },
-        verticalLineDependenceOnTimeScale: view.scale,
+        horizontalLine: view.showGrid ? { lineColor: BORDER, lineWidth: 1 } : undefined,
+        verticalLine: view.showGrid ? ({ date }) => {
+          const next = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1) : undefined;
+          const major = next?.getDate() === 1;
+          const week = next?.getDay() === view.weekStartsOn;
+          return { lineColor: major ? '#cad7cf' : week ? '#dce5de' : '#edf0ed',
+            lineWidth: major || (week && view.dayWidth >= 2) || view.dayWidth >= 10 ? 1 : 0 };
+        } : undefined,
+        verticalLineDependenceOnTimeScale: 'day',
         horizontalBackgroundColor: ({ index, ganttInstance }) =>
           ganttInstance === this.gantt && items[index]?.id === this.selectedId ? 'rgba(35,115,92,0.055)' : 'transparent'
       },
       taskBar: {
         startDateField: '_ganttStart', endDateField: '_ganttEnd',
-        moveable: true, resizable: ({ taskRecord }) => taskRecord.type !== 'milestone',
+        // Pointer transactions live in TimelineInteraction: preview/cancel first,
+        // then one validated model commit. Native rendering remains unchanged.
+        moveable: false, resizable: false,
         progressAdjustable: false, scheduleCreatable: false, dragOrder: false,
         moveToExtendDateRange: false, selectable: true, locateIcon: false,
         labelText: '{name}',
@@ -385,16 +566,23 @@ export class TimelineChart {
         selectedBarStyle: { borderColor: 'transparent', borderLineWidth: 0,
           shadowColor: 'transparent', shadowBlur: 0 }
       },
-      markLine: markers.map(marker => ({ date: toChartDate(marker.date), content: marker.label,
-        position: 'middle', scrollToMarkLine: false,
+      markLine: [...markers.map(marker => ({ date: toChartDate(marker.date), content: marker.label,
+        position: 'middle' as const, scrollToMarkLine: false,
         style: { lineColor: marker.color, lineWidth: 1, lineDash: [4, 4] },
         contentStyle: { color: marker.color, fontSize: 10, fontWeight: '500', lineHeight: 18,
-          backgroundColor: '#ffffff', cornerRadius: 3 } })),
+          backgroundColor: '#ffffff', cornerRadius: 3 } })), ...(view.showToday ? [{
+        date: toChartDate(localToday()), content: '今天', position: 'middle' as const, scrollToMarkLine: false,
+        style: { lineColor: '#237f68', lineWidth: 1.5, lineDash: [3, 3] },
+        contentStyle: { color: '#237f68', fontSize: 10, fontWeight: '600', lineHeight: 18,
+          backgroundColor: '#f2faf5', cornerRadius: 3 }
+      }] : [])],
       markLineCreateOptions: { markLineCreatable: false },
       frame: { outerFrameStyle: { borderColor: BORDER, borderLineWidth: 0 },
-        verticalSplitLine: { lineColor: BORDER, lineWidth: 1 },
-        horizontalSplitLine: { lineColor: BORDER, lineWidth: 1 }, verticalSplitLineMoveable: false },
-      scrollStyle: { visible: 'scrolling', width: 8, scrollRailColor: '#f5f7f5', scrollSliderColor: '#c9d3cd' }
+        verticalSplitLine: { lineColor: '#cbd8cf', lineWidth: 2 },
+        verticalSplitLineHighlight: { lineColor: '#62977d', lineWidth: 4 },
+        horizontalSplitLine: { lineColor: BORDER, lineWidth: 1 }, verticalSplitLineMoveable: true },
+      scrollStyle: { visible: 'always', width: 12, hoverOn: false, barToSide: true,
+        scrollRailColor: '#edf2ee', scrollSliderColor: '#a6beb0', scrollSliderCornerRadius: 5 }
     };
   }
 }
