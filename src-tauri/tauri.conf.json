@@ -50,7 +50,8 @@
     "resources": {
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "../LICENSE-THIRD-PARTY.txt": "LICENSE-THIRD-PARTY.txt",
-      "THIRD_PARTY_RUST.txt": "THIRD_PARTY_RUST.txt"
+      "THIRD_PARTY_RUST.txt": "THIRD_PARTY_RUST.txt",
+      "THIRD_PARTY_SOURCES": "THIRD_PARTY_SOURCES"
     }
   }
 }
