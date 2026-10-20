@@ -4,7 +4,9 @@
 
 pst 是以出圖為核心的輕量網頁時程編輯器。左側表格與右側時間軸逐列對齊，讓你呈現項目、日期、特定時段與重要節點，再將完整圖表匯出成 PNG，放進簡報或報告。
 
-目前版本：**v0.1 開發版**。此儲存庫包含可建置的前端應用、資料模型測試與第三方授權聲明；尚未設定網站代管。第一版重用 VTable-Gantt 的表格、時間軸、拖曳與整圖匯出能力。
+目前版本：**v0.1 開發版**。此儲存庫包含可建置的前端應用、資料模型測試與第三方授權聲明，已透過 GitHub Pages 發布。第一版重用 VTable-Gantt 的表格、時間軸、拖曳與整圖匯出能力。
+
+**[直接開啟 pst 網站](https://avery320.github.io/pst/)** — 不需安裝開發工具或登入帳號。
 
 ## 第一版功能
 
@@ -58,6 +60,14 @@ npm run preview
 
 `dist/` 是可部署的靜態網站，包含打包後的依賴及授權聲明，無需後端服務。`base: './'` 允許放在子路徑。建置產物應透過 HTTP(S) 提供；來源目錄的 index.html 需經 Vite 處理。
 
+## 網站部署
+
+正式網址：<https://avery320.github.io/pst/>
+
+[部署工作流程](.github/workflows/deploy.yml) 會在 `main` 更新時自動執行，也可在 GitHub 的 Actions 頁面手動啟動。流程使用 Node.js 24，依序執行 `npm ci`、`npm test` 與 `npm run build`，成功後才將 `dist/` 發布到 GitHub Pages；測試或建置失敗時保留原本的線上版本。
+
+Pages 的發布來源為 GitHub Actions，使用預設 HTTPS 網址。建置與發布分成兩個工作，僅發布工作取得 Pages 部署權限；官方 Actions 固定到已核對的 commit，並依序執行部署以避免互相中斷。
+
 ## 技術與開源底座
 
 - **TypeScript + Vite**：使用原生 DOM 製作操作介面。
@@ -81,6 +91,7 @@ VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8
 | chart-dates.ts | 繪圖元件的日期轉換與拖曳工期修正。 |
 | model.test.ts、chart-dates.test.ts | 文件、日期、界限、匯入與歷史紀錄的回歸測試。 |
 | vite.config.ts | 靜態建置與第三方授權檔打包。 |
+| .github/workflows/deploy.yml | GitHub Actions 測試、建置與 Pages 自動發布。 |
 
 日期儲存為 YYYY-MM-DD 的日曆日期，模型使用 UTC 做天數運算；繪圖層轉為元件使用的本地日期格式，避免將 UTC 時間戳誤當成日曆日期。升級 VTable 時，應重新驗證跨時區拖曳、里程碑與標記標籤的整合行為。
 
@@ -95,7 +106,7 @@ VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8
 
 ## 驗證狀態與目前界限
 
-目前已通過 28 個資料與日期回歸測試、嚴格 TypeScript 檢查與正式建置。測試包含夏令時間前後的工期保持、範圍裁切後拖移、匯入格式與復原／重做。**實際瀏覽器拖曳、PNG 視覺比對、不同螢幕尺寸及瀏覽器相容性仍待互動驗收**；本次雲端環境未提供可用的預覽瀏覽器控制能力。
+目前已通過 28 個資料與日期回歸測試、嚴格 TypeScript 檢查與正式建置；GitHub Actions 的首次建置與部署亦已成功。測試包含夏令時間前後的工期保持、範圍裁切後拖移、匯入格式與復原／重做。已在正式網址確認首頁、範例時間軸與編輯面板可以載入。**實際瀏覽器拖曳、PNG 視覺比對、不同螢幕尺寸及瀏覽器相容性仍待完整互動驗收**。
 
 此版本提供固定的項目、起日、迄日與說明欄位，以及日期標線和里程碑。任意新增欄位、合併儲存格、自由文字框、箭頭塗鴉、SVG／PDF 輸出與跨裝置同步尚未實作。
 
