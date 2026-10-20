@@ -119,8 +119,13 @@ jobs:
       - name: Verify both macOS architectures and the ad-hoc signature
         if: matrix.platform == 'macos-universal'
         run: |
-          lipo -verify_arch arm64 x86_64 src-tauri/target/universal-apple-darwin/release/pst
-          codesign --verify --deep --strict src-tauri/target/universal-apple-darwin/release/bundle/macos/pst.app
+          pst_mount_dir="$(mktemp -d)"
+          trap 'hdiutil detach "$pst_mount_dir" -quiet >/dev/null 2>&1 || true; rmdir "$pst_mount_dir" 2>/dev/null || true' EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$pst_mount_dir" \
+            "desktop-artifacts/pst_${PST_RELEASE_VERSION}_macos-universal.dmg"
+          pst_app="$pst_mount_dir/pst.app"
+          lipo "$pst_app/Contents/MacOS/pst" -verify_arch arm64 x86_64
+          codesign --verify --deep --strict "$pst_app"
       - name: Test native file handling
         run: cargo test --release --manifest-path src-tauri/Cargo.toml --locked --target ${{ matrix.native-target }} --features custom-protocol --lib
       - name: Upload built installers, notices, covered sources, and checksums
