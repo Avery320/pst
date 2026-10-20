@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "title": "產品上線時程",
+  "subtitle": "從需求整理到正式發佈，讓每個階段一目了然。",
+  "items": [
+    {
+      "id": "task-3c9e0310-c99c-491f-9e0d-29e1d0e98cff",
+      "name": "需求與版面確認",
+      "start": "2026-10-02",
+      "end": "2026-10-06",
+      "type": "task",
+      "color": "#5269E8",
+      "note": "確認表格欄位、日期刻度與閱讀順序。"
+    },
+    {
+      "id": "task-04bf147d-de66-4160-9c7b-b1d12082869a",
+      "name": "資料欄位整理",
+      "start": "2026-10-05",
+      "end": "2026-10-10",
+      "type": "task",
+      "color": "#6B7A90",
+      "note": "整理任務名稱、日期與說明文字。"
+    },
+    {
+      "id": "task-7778b963-e952-4ca7-8a3b-c220524a8d4c",
+      "name": "版面定稿",
+      "start": "2026-10-11",
+      "end": "2026-10-11",
+      "type": "milestone",
+      "color": "#E6A23C",
+      "note": "確認第一版圖表樣式。"
+    },
+    {
+      "id": "task-81f14bde-4737-4210-9501-db3f87af9809",
+      "name": "時間軸互動製作",
+      "start": "2026-10-12",
+      "end": "2026-10-21",
+      "type": "task",
+      "color": "#5269E8",
+      "note": "完成拖曳、縮放與日期對齊。"
+    },
+    {
+      "id": "task-2296e623-3280-45c1-ad16-d3fa26add67e",
+      "name": "標記與表格編輯",
+      "start": "2026-10-16",
+      "end": "2026-10-25",
+      "type": "task",
+      "color": "#20A292",
+      "note": "加入色彩、備註與日期標記。"
+    },
+    {
+      "id": "task-23e81208-9cde-42cf-b151-0c3768ec0d85",
+      "name": "出圖與版面檢查",
+      "start": "2026-10-26",
+      "end": "2026-10-31",
+      "type": "task",
+      "color": "#9B6BD3",
+      "note": "檢查文字、表格及時間軸的輸出效果。"
+    },
+    {
+      "id": "task-4deacead-5bcc-4665-9892-28b4ade1d1ee",
+      "name": "操作驗證與調整",
+      "start": "2026-10-30",
+      "end": "2026-11-05",
+      "type": "task",
+      "color": "#ED8C4A",
+      "note": "以實際時程驗證編輯、存檔與復原操作。"
+    },
+    {
+      "id": "task-ddcb7fca-5773-4d12-8ef9-10e7ea027c7d",
+      "name": "第一版發佈",
+      "start": "2026-11-07",
+      "end": "2026-11-07",
+      "type": "milestone",
+      "color": "#D5617D",
+      "note": "交付可編輯資料與完成的時程圖。"
+    }
+  ],
+  "markers": [
+    {
+      "id": "marker-1265a012-0361-45b1-a61f-5c1bd858cd30",
+      "date": "2026-10-11",
+      "label": "設計檢視",
+      "color": "#B7791F"
+    },
+    {
+      "id": "marker-19b0a82f-3e3a-4e86-8ffd-b03db9ec011b",
+      "date": "2026-11-07",
+      "label": "交付日",
+      "color": "#B34E6C"
+    }
+  ],
+  "view": {
+    "start": "2026-10-01",
+    "end": "2026-11-11",
+    "scale": "week",
+    "dayWidth": 18,
+    "rowHeight": 48,
+    "showNotes": false,
+    "showWeekends": true
+  }
+}

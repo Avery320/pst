@@ -147,3 +147,13 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Editor and operating system temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Local test artifacts
+test-results/
+playwright-report/

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#176b61" />
+    <meta name="description" content="用表格整理項目、用時間軸畫出節奏。pst 是可保存、可編輯、可匯出 PNG 的輕量時程出圖工具。" />
+    <title>pst — 時間軸與表格出圖</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">前往圖表工作區</a>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#workspace" aria-label="pst 時間軸工作室">
+          <span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-name">pst<span class="brand-dot">.</span></span>
+          <span class="brand-caption">時間軸工作室</span>
+        </a>
+        <div class="topbar-actions">
+          <button id="new-document" class="button button-quiet" type="button"><span data-icon="file"></span><span>新圖表</span></button>
+          <button id="import-document" class="button button-quiet" type="button"><span data-icon="upload"></span><span>開啟 JSON</span></button>
+          <button id="save-document" class="button button-secondary" type="button"><span data-icon="download"></span><span>儲存 JSON</span></button>
+          <button id="open-export" class="button button-primary" type="button"><span data-icon="image"></span><span>匯出圖片</span></button>
+        </div>
+      </header>
+
+      <main id="workspace" class="workspace" tabindex="-1">
+        <section class="document-heading" aria-label="圖表資訊">
+          <div class="heading-main">
+            <div class="eyebrow"><span class="eyebrow-line"></span>把時間，畫清楚</div>
+            <label class="sr-only" for="document-title">圖表標題</label>
+            <input id="document-title" class="document-title" type="text" maxlength="120" placeholder="未命名圖表" autocomplete="off" />
+            <p id="document-subtitle" class="document-subtitle"></p>
+          </div>
+          <div class="document-status">
+            <span id="save-status" class="save-status" role="status"><span class="status-dot"></span>已儲存在此瀏覽器</span>
+            <span id="document-stats" class="document-stats"></span>
+          </div>
+        </section>
+
+        <div class="editor-layout">
+          <section class="canvas-panel" aria-labelledby="canvas-heading">
+            <div class="canvas-toolbar">
+              <div class="toolbar-group">
+                <h1 id="canvas-heading" class="panel-label"><span data-icon="timeline"></span>時間圖表</h1>
+                <span class="toolbar-divider" aria-hidden="true"></span>
+                <div class="segmented" role="group" aria-label="時間刻度">
+                  <button type="button" data-scale="day" aria-pressed="false">日</button>
+                  <button type="button" data-scale="week" aria-pressed="false">週</button>
+                  <button type="button" data-scale="month" aria-pressed="false">月</button>
+                </div>
+              </div>
+              <div class="toolbar-group">
+                <button id="undo" type="button" class="icon-button" title="復原（Ctrl / ⌘ + Z）" aria-label="復原"><span data-icon="undo"></span></button>
+                <button id="redo" type="button" class="icon-button" title="重做（Ctrl / ⌘ + Shift + Z）" aria-label="重做"><span data-icon="redo"></span></button>
+                <span class="toolbar-divider" aria-hidden="true"></span>
+                <button id="add-task" type="button" class="button button-small button-tinted"><span data-icon="plus"></span>新增時段</button>
+                <button id="add-milestone" type="button" class="icon-button" title="新增里程碑" aria-label="新增里程碑"><span data-icon="diamond"></span></button>
+              </div>
+            </div>
+
+            <div class="range-toolbar">
+              <div class="date-range">
+                <span class="range-label"><span data-icon="calendar"></span>顯示範圍</span>
+                <label class="sr-only" for="view-start">顯示開始日期</label>
+                <input type="date" id="view-start" min="1900-01-01" max="2100-12-31" />
+                <span class="range-arrow" aria-hidden="true">—</span>
+                <label class="sr-only" for="view-end">顯示結束日期</label>
+                <input type="date" id="view-end" min="1900-01-01" max="2100-12-31" />
+                <button id="fit-range" type="button" class="text-button" title="讓顯示範圍涵蓋所有項目與日期標記">顯示全部</button>
+              </div>
+              <div class="zoom-control">
+                <label for="zoom">刻度寬度</label>
+                <input id="zoom" type="range" min="12" max="80" step="2" />
+                <output id="zoom-value" for="zoom"></output>
+              </div>
+            </div>
+
+            <div class="chart-stage">
+              <div id="chart" role="region" aria-label="可拖曳的時間軸與表格。也可以使用右側的項目表單編輯所有資料。"></div>
+              <div id="chart-error" class="chart-message" hidden>
+                <span data-icon="info"></span><h2>圖表暫時無法顯示</h2><p id="chart-error-message"></p><button id="retry-chart" class="button button-secondary" type="button">重新載入圖表</button>
+              </div>
+              <div id="empty-chart" class="chart-message" hidden>
+                <span class="empty-illustration" aria-hidden="true"><i></i><i></i><i></i></span>
+                <h2>從第一個時段開始</h2><p>新增項目、設定日期，就能畫出你的時間圖。</p>
+                <div class="empty-actions"><button id="empty-add-task" class="button button-primary" type="button">新增時段</button><button id="empty-demo" class="button button-secondary" type="button">載入範例</button></div>
+              </div>
+            </div>
+
+            <div class="canvas-footer">
+              <span><span data-icon="pointer"></span>拖曳時段移動日期，拖曳兩端調整長度</span>
+              <span id="range-notice" class="range-notice" aria-live="polite"></span>
+              <span class="canvas-footer-right">雙擊表格文字即可編輯</span>
+            </div>
+          </section>
+
+          <aside class="inspector" aria-label="圖表編輯面板">
+            <div class="inspector-tabs" role="tablist" aria-label="編輯分類">
+              <button id="tab-item" type="button" class="inspector-tab" role="tab" aria-selected="true" aria-controls="pane-item" data-tab="item">項目</button>
+              <button id="tab-markers" type="button" class="inspector-tab" role="tab" aria-selected="false" aria-controls="pane-markers" data-tab="markers" tabindex="-1">日期標記</button>
+              <button id="tab-settings" type="button" class="inspector-tab" role="tab" aria-selected="false" aria-controls="pane-settings" data-tab="settings" tabindex="-1">圖面</button>
+            </div>
+
+            <section id="pane-item" class="inspector-pane" role="tabpanel" aria-labelledby="tab-item">
+              <div class="pane-heading"><h2>項目內容</h2><span id="item-kind-badge" class="small-badge">時段</span></div>
+              <div class="field"><label for="selected-item">選取項目</label><select id="selected-item"></select></div>
+              <div id="item-fields">
+                <div class="field"><label for="item-name">名稱</label><input id="item-name" maxlength="160" type="text" autocomplete="off" /></div>
+                <div class="field"><label for="item-type">呈現方式</label><select id="item-type"><option value="task">時段長條</option><option value="milestone">里程碑節點</option></select></div>
+                <div class="field-row">
+                  <div class="field"><label for="item-start">開始日期</label><input id="item-start" type="date" min="1900-01-01" max="2100-12-31" /></div>
+                  <div class="field"><label for="item-end">結束日期</label><input id="item-end" type="date" min="1900-01-01" max="2100-12-31" /></div>
+                </div>
+                <p id="item-duration" class="field-hint"></p>
+                <div class="field"><label for="item-color">項目顏色</label><div class="color-control"><div id="color-swatches" class="color-swatches" role="group" aria-label="快速選擇項目顏色"></div><input id="item-color" type="color" title="自訂項目顏色" /></div></div>
+                <div class="field"><label for="item-note">說明 <span class="optional">選填</span></label><textarea id="item-note" rows="3" maxlength="1000" placeholder="補充這個時段的內容…"></textarea></div>
+                <div class="item-actions" role="group" aria-label="項目操作">
+                  <button id="move-up" class="icon-button" type="button" title="上移一列" aria-label="上移一列"><span data-icon="arrowUp"></span></button>
+                  <button id="move-down" class="icon-button" type="button" title="下移一列" aria-label="下移一列"><span data-icon="arrowDown"></span></button>
+                  <button id="duplicate-item" class="button button-quiet button-small" type="button"><span data-icon="copy"></span>複製</button>
+                  <button id="delete-item" class="icon-button danger-button" type="button" title="刪除項目（可復原）" aria-label="刪除項目"><span data-icon="trash"></span></button>
+                </div>
+              </div>
+              <div id="no-selection" class="inspector-empty" hidden><span data-icon="pointer"></span><p>在時間軸或表格選取一個項目，開始編輯。</p></div>
+              <div class="inspector-tip"><span data-icon="lightbulb"></span><p>項目用來說明時間安排。用顏色和節點，讓重要日期一眼就看見。</p></div>
+            </section>
+
+            <section id="pane-markers" class="inspector-pane" role="tabpanel" aria-labelledby="tab-markers" hidden>
+              <div class="pane-heading"><h2>日期標記</h2><span id="marker-count" class="small-badge">0</span></div>
+              <p class="pane-description">用垂直標線指出重要日期，搭配簡短文字說明。</p>
+              <div id="marker-list" class="marker-list"></div>
+              <form id="marker-form" class="marker-form">
+                <h3 id="marker-form-heading">新增標記</h3>
+                <div class="field"><label for="marker-label">標記文字</label><input id="marker-label" type="text" maxlength="120" required placeholder="例如：設計定稿" /></div>
+                <div class="field-row marker-inputs"><div class="field"><label for="marker-date">日期</label><input id="marker-date" type="date" min="1900-01-01" max="2100-12-31" required /></div><div class="field"><label for="marker-color">顏色</label><input id="marker-color" type="color" value="#e5913a" /></div></div>
+                <div class="form-actions"><button id="save-marker" class="button button-tinted" type="submit"><span data-icon="plus"></span><span id="save-marker-label">新增標記</span></button><button id="cancel-marker" class="text-button" type="button" hidden>取消編輯</button></div>
+              </form>
+            </section>
+
+            <section id="pane-settings" class="inspector-pane" role="tabpanel" aria-labelledby="tab-settings" hidden>
+              <div class="pane-heading"><h2>圖面設定</h2><span data-icon="sliders"></span></div>
+              <div class="field"><label for="subtitle">副標題 <span class="optional">選填</span></label><textarea id="subtitle" rows="3" maxlength="240" placeholder="說明這份圖表的主題或範圍"></textarea></div>
+              <div class="field"><label for="row-height">資料列間距</label><select id="row-height"><option value="36">緊湊 · 36 px</option><option value="48">標準 · 48 px</option><option value="60">寬鬆 · 60 px</option></select></div>
+              <label class="toggle-field" for="show-notes"><span><strong>顯示說明欄</strong><small>在表格加入項目的文字說明</small></span><input id="show-notes" type="checkbox" /></label>
+              <label class="toggle-field" for="show-weekends"><span><strong>顯示週末底色</strong><small>以淡色區分週六與週日</small></span><input id="show-weekends" type="checkbox" /></label>
+              <div class="settings-section"><h3>文件保存</h3><p>編輯會自動保存在目前瀏覽器。下載 JSON，可在另一台裝置接續編輯。</p><button id="settings-save" class="button button-secondary full-width" type="button"><span data-icon="download"></span>下載可編輯的 JSON</button></div>
+              <div class="settings-section"><h3>探索範例</h3><p>載入一份已排好的時間表，試試拖曳、改色與出圖。可以復原回目前圖表。</p><button id="load-demo" class="button button-quiet full-width" type="button"><span data-icon="sparkles"></span>載入範例圖表</button></div>
+            </section>
+          </aside>
+        </div>
+
+        <footer class="workspace-footer"><span>為清楚的時間表達而設計</span><span>pst v0.1 <span class="footer-dot">·</span> 資料保存在你的瀏覽器</span></footer>
+      </main>
+    </div>
+
+    <dialog id="export-dialog" class="export-dialog" aria-labelledby="export-heading">
+      <div class="dialog-header"><span class="dialog-icon" data-icon="image"></span><button id="close-export" class="icon-button" type="button" aria-label="關閉匯出視窗"><span data-icon="close"></span></button></div>
+      <h2 id="export-heading">把時間圖表帶走</h2>
+      <p>匯出完整表格、時間軸與日期標記，包含捲動畫面之外的內容。</p>
+      <div class="export-preview"><span class="export-file-icon" data-icon="fileImage"></span><div><strong id="export-filename"></strong><small>PNG 圖片 · 白色背景</small></div><span class="file-tag">PNG</span></div>
+      <div class="field"><label for="export-scale">圖片解析度</label><select id="export-scale"><option value="2">清晰 · 2 倍（適合簡報）</option><option value="1">標準 · 1 倍（較小檔案）</option></select></div>
+      <label class="checkbox-field"><input id="export-title" type="checkbox" checked /><span>包含標題、副標題與日期範圍</span></label>
+      <p class="export-note">圖片保留目前設定的日期範圍與欄位。JSON 另存後可繼續編輯。</p>
+      <p id="export-error" class="error-text" role="alert" hidden></p>
+      <button id="export-png" class="button button-primary full-width" type="button"><span data-icon="download"></span><span id="export-button-label">下載 PNG 圖片</span></button>
+    </dialog>
+    <input id="import-file" type="file" accept=".json,application/json" hidden />
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./app.ts"></script>
+  </body>
+</html>
