@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   base: './',
+  clearScreen: false,
+  server: {
+    strictPort: true,
+    watch: { ignored: ['**/src-tauri/**'] },
+  },
   plugins: [{
     name: 'pst-third-party-notices',
     generateBundle() {
@@ -17,7 +22,7 @@ export default defineConfig({
     },
   }],
   build: {
-    target: 'es2022',
+    target: ['es2022', 'safari16', 'chrome105'],
     chunkSizeWarningLimit: 2000,
   },
 });

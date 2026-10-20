@@ -1,0 +1,33 @@
+[package]
+name = "pst-desktop"
+version = "0.3.0"
+description = "A lightweight timeline and table editor for presentation-ready diagrams."
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[lib]
+name = "pst_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pst"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "=2.12.4", features = [] }
+tauri-plugin-dialog = "=2.8.3"
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
