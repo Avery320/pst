@@ -173,13 +173,13 @@
               <label class="toggle-field" for="show-grid"><span><strong>顯示日期格線</strong><small>協助對齊時段與日期</small></span><input id="show-grid" type="checkbox" checked /></label>
               <label class="toggle-field" for="show-notes"><span><strong>顯示說明欄</strong><small>在表格加入項目的文字說明</small></span><input id="show-notes" type="checkbox" /></label>
               <label class="toggle-field" for="show-weekends"><span><strong>顯示週末底色</strong><small>以淡色區分週六與週日</small></span><input id="show-weekends" type="checkbox" /></label>
-              <div class="settings-section"><h3>文件保存</h3><p>編輯會自動保存在目前瀏覽器。下載 JSON，可在另一台裝置接續編輯。</p><button id="settings-save" class="button button-secondary full-width" type="button"><span data-icon="download"></span>下載可編輯的 JSON</button></div>
+              <div class="settings-section"><h3>文件保存</h3><p id="storage-description">編輯會自動保存在目前瀏覽器。下載 JSON，可在另一台裝置接續編輯。</p><button id="settings-save" class="button button-secondary full-width" type="button"><span data-icon="download"></span><span id="settings-save-label">下載可編輯的 JSON</span></button></div>
               <div class="settings-section"><h3>探索範例</h3><p>載入一份已排好的時間表，試試拖曳、改色與出圖。可以復原回目前圖表。</p><button id="load-demo" class="button button-quiet full-width" type="button"><span data-icon="sparkles"></span>載入範例圖表</button></div>
             </section>
           </aside>
         </div>
 
-        <footer class="workspace-footer"><span>為清楚的時間表達而設計</span><span>pst v0.2 <span class="footer-dot">·</span> 資料保存在你的瀏覽器</span></footer>
+        <footer class="workspace-footer"><span>為清楚的時間表達而設計</span><span><span id="app-version">pst v0.3.0</span> <span class="footer-dot">·</span> <span id="footer-storage">資料保存在你的瀏覽器</span></span></footer>
         <span id="layout-status" class="sr-only" role="status" aria-live="polite"></span>
       </main>
     </div>

@@ -2,9 +2,31 @@
 
 **把時間，畫清楚。**
 
-pst 是以出圖為核心的輕量網頁時程編輯器。左側表格與右側時間軸逐列對齊，讓你呈現項目、日期、特定時段與重要節點，再將完整圖表匯出成 PNG，放進簡報或報告。
+pst 是以出圖為核心的輕量時程編輯器，提供網頁版與 Windows／macOS 桌面版。左側表格與右側時間軸逐列對齊，讓你呈現項目、日期、特定時段與重要節點，再將完整圖表匯出成 PNG，放進簡報或報告。
 
-目前版本：**v0.2 開發版**。此儲存庫包含可建置的前端應用、自動化測試與第三方授權聲明，透過 GitHub Pages 發布。沿用 VTable-Gantt 的表格、時間軸與整圖匯出，在整合層補上日曆、可預覽並取消的日期拖曳，以及可調整的工作區。
+目前版本：**v0.3.0**。沿用 VTable-Gantt 的表格、時間軸與整圖匯出，以及 v0.2 的日曆、格點拖曳和可調整工作區，新增 **Rust／Tauri 2 桌面程式**。網頁與 App 共用同一套編輯器；桌面 App 內含完整前端資源，可離線編輯與匯出，使用原生檔案對話框開啟及保存文件。
+
+## 下載桌面版
+
+到 [GitHub Releases](https://github.com/Avery320/pst/releases) 下載安裝檔。GitHub Actions 直接在 Windows 與 macOS 雲端執行器編譯並發布，不需要使用者安裝 Node.js、Rust 或自行打包。
+
+| 平台 | 安裝檔 | 架構與需求 |
+| --- | --- | --- |
+| Windows | `.exe`，NSIS 安裝程式 | x64；Windows 10／11，使用 WebView2。系統缺少 WebView2 時，安裝程式會下載安裝。 |
+| macOS | `.dmg`，開啟後把 pst 拖到 Applications | Universal，包含 Apple Silicon 與 Intel；最低版本設定為 macOS 13。 |
+| 完整性核對 | `SHA256SUMS.txt` | 對應同一 Release 的安裝檔雜湊。 |
+
+v0.3.0 的 Windows 安裝檔尚未設定發行者程式簽章；macOS 使用 ad-hoc 簽章，尚未經 Apple 公證。首次開啟可能受到 SmartScreen 或 Gatekeeper 提示或阻擋。發行者簽章和 Apple 公證需要另外配置相應憑證；本版沒有內建、索取或上傳個人憑證。請依作業系統提供的驗證流程確認來源；公司管理的設備也可能受安裝政策限制。
+
+### 桌面文件操作
+
+- **開啟 JSON**：使用系統檔案視窗選擇既有 pst JSON；取消不會更動目前文件。
+- **儲存 JSON**：選擇儲存位置，保留可再次編輯的資料；`Ctrl / ⌘ + S` 也可使用。
+- **匯出圖片**：產生完整 PNG 後，選擇儲存位置；取消另存仍保留匯出設定。
+- **自動保存**：目前文件保存在這台電腦的 pst App 資料空間。網頁版與桌面版各自保存，可透過 JSON 在兩者間搬移文件。
+- **關閉視窗**：先提交正在編輯的文字與表格欄位，再關閉桌面視窗；檔案對話操作尚未完成時會保留視窗。
+
+桌面版沿用既有 schema-1 JSON，v0.1／v0.2 文件可繼續開啟。安裝後不需要網路來繪圖、標記日期或輸出檔案；本版沒有雲端同步或自動更新服務。
 
 **[直接開啟 pst 網站](https://avery320.github.io/pst/)** — 不需安裝開發工具或登入帳號。
 
@@ -17,7 +39,7 @@ pst 是以出圖為核心的輕量網頁時程編輯器。左側表格與右側�
 | 時間軸與拖曳 | 移動時段、調整起訖邊界；1 天／7 天吸附、落點預覽、對齊線、日期與位移提示；Escape 取消；日／週／月表頭、今天線、週末底色。 |
 | 工作區 | 可拖曳的表格／時間軸分界與側邊面板分隔線；面板收合、獨立捲動；時間軸位置滑桿、縮放與符合寬度；窄螢幕堆疊。 |
 | 日期標記 | 新增、編輯與刪除垂直日期標線，設定文字與顏色。 |
-| 文件 | 復原／重做；目前瀏覽器自動保存；匯入／匯出可再次編輯的 JSON。 |
+| 文件 | 復原／重做；瀏覽器／桌面 App 各自自動保存；匯入／匯出可再次編輯的 JSON。 |
 | PNG 出圖 | 匯出完整表格、時間軸與標記，包含捲動畫面之外的列與欄；提供 1 倍／2 倍解析度，可加入標題、副標題與日期範圍。 |
 | 範例 | 內建一份有八個項目、里程碑與日期標記的時間表；也提供 example.pst.json。 |
 
@@ -58,7 +80,7 @@ PNG 依目前選定的日期範圍與欄位出圖。若內容超出範圍，按�
 
 ### 快捷鍵
 
-- `Ctrl / ⌘ + S`：下載 JSON。
+- `Ctrl / ⌘ + S`：網頁版下載 JSON；桌面版開啟另存新檔對話框。
 - `Ctrl / ⌘ + Z`：復原圖表操作。
 - `Ctrl / ⌘ + Shift + Z` 或 `Ctrl + Y`：重做。
 - 拖曳時按 `Escape`：取消這次拖動。
@@ -88,6 +110,41 @@ npm run preview
 
 `dist/` 是可部署的靜態網站，包含打包後的依賴及授權聲明，無需後端服務。`base: './'` 允許放在子路徑。建置產物應透過 HTTP(S) 提供；來源目錄的 index.html 需經 Vite 處理。
 
+### 桌面開發與建置
+
+一般使用者直接下載安裝檔即可。開發者需另安裝 [Tauri 官方列出的平台建置工具](https://v2.tauri.app/start/prerequisites/)；Rust 版本由 `rust-toolchain.toml` 固定，JavaScript 與 Rust 相依版本分別由 `package-lock.json`、`src-tauri/Cargo.lock` 鎖定。
+
+```bash
+npm ci
+npm run desktop:dev
+```
+
+`desktop:dev` 會先蒐集目前平台的 Rust 授權與必要來源資源；首次執行需要下載鎖定的 Rust 依賴。接著使用僅綁定本機的 Vite 開發服務，固定在 `127.0.0.1:1420`。正式 App 使用隨安裝包內附的 `dist/`。
+
+原生安裝檔應在對應作業系統建置。先產生該目標的第三方授權文字，再使用鎖定相依版本打包：
+
+```bash
+# Windows x64，在 Windows 執行
+node scripts/desktop-licenses.mjs --target x86_64-pc-windows-msvc --features custom-protocol
+npm run tauri -- build --ci --target x86_64-pc-windows-msvc --bundles nsis -- --locked
+
+# macOS Universal，在 macOS 執行
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+node scripts/desktop-licenses.mjs --target aarch64-apple-darwin --target x86_64-apple-darwin --features custom-protocol
+npm run tauri -- build --ci --target universal-apple-darwin --bundles dmg -- --locked
+```
+
+### 直接由 GitHub 打包與發布
+
+[桌面發布工作流程](.github/workflows/desktop.yml) 與 Pages 部署各自執行。更新網站不會每次都重新打包桌面 App。
+
+1. 把完整更新合併至 `main`，同步修改 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json` 的應用版本。
+2. 在 **Actions → Build desktop installers and publish release → Run workflow** 選擇 `main`。也可推送與應用版本完全一致的 `v*` tag 觸發。
+3. GitHub 分別使用 `windows-2025` 與 `macos-15` 編譯，執行前端與 Rust 測試，並檢查 macOS 二進位同時含有 `arm64`／`x86_64`。
+4. 兩個平台全部通過後，才建立該版本的 GitHub Release，附上安裝檔、授權說明、需要提供的第三方來源檔與 `SHA256SUMS.txt`。Actions 中的建置附件保留 30 天；Release 另存下載檔。
+
+發布流程會核對來源 commit、版本與兩份 lockfile，並在發布前重算檔案 SHA-256。已發布版本不會被後續重跑覆寫；需要更新時提高版本號。建置工作只取得讀取權限，僅最後的發布工作能寫入 Release。
+
 ## 網站部署
 
 正式網址：<https://avery320.github.io/pst/>
@@ -99,14 +156,19 @@ Pages 的發布來源為 GitHub Actions，使用預設 HTTPS 網址。建置與�
 ## 技術與開源底座
 
 - **TypeScript + Vite**：使用原生 DOM 製作操作介面。
+- **Rust + [Tauri 2](https://v2.tauri.app/)**：桌面視窗、原生檔案選擇與保存、Windows／macOS 安裝包。
 - **[@visactor/vtable-gantt 1.26.8](https://github.com/VisActor/VTable/tree/v1.26.8/packages/vtable-gantt)**：表格與時間軸、里程碑、標記線及整圖匯出底座。
 - **@visactor/vtable-editors 1.26.8**：表格文字與多行說明編輯器。
 - **@visactor/vtable-plugins 1.26.8**：透過 gantt-extensions 入口延後載入官方 ExportGanttPlugin。
-- **瀏覽器 localStorage**：保存目前的文件；JSON 檔作為可攜式備份。
+- **localStorage**：在網頁來源或桌面 App 資料空間保存目前文件；JSON 檔作為可攜式備份。
 
 VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8/LICENSE)，允許商用與修改，須保留相應著作權與授權聲明。實際瀏覽器產物中還包含其他 MIT／BSD／ISC 授權元件及建置輔助碼，已整理於 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) 和 [LICENSE-THIRD-PARTY.txt](./LICENSE-THIRD-PARTY.txt)，建置時也會複製到 dist/。
 
 第三方授權與 pst 自有程式碼的對外授權分別處理；後者目前由專案擁有者保留決定。
+
+桌面版的 Tauri 與相關 Rust 元件保留各自授權聲明。`scripts/desktop-licenses.mjs` 依鎖定版本及目標架構蒐集相依套件的原始授權文字，打包為 `THIRD_PARTY_RUST.txt`，Release 也會提供各平台對應的副本。
+
+少量間接依賴採 MPL-2.0。專案會將這些未修改套件的完整原始 `.crate` 檔與來源說明放入桌面安裝資源及 Release，保留其授權與取得來源的方式；這些元件的授權不代表 pst 全部自有程式碼改採 MPL。授權蒐集器也保留上游精確版本的原文及來源紀錄，缺少資料時會停止打包。
 
 ## 程式結構
 
@@ -114,6 +176,9 @@ VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8
 | --- | --- |
 | index.html、styles.css | 編輯器版面、響應式樣式與無障礙標籤。 |
 | app.ts | 表單、文件操作、復原／重做、自動保存、JSON 與 PNG 下載。 |
+| platform.ts | 網頁下載／桌面原生檔案操作切換、取消與錯誤處理、關閉視窗前提交編輯。 |
+| src-tauri/ | Rust 主程式、檔案讀寫邊界、權限與跨平台打包設定。 |
+| rust-toolchain.toml | 固定 Rust 建置工具鏈版本。 |
 | chart.ts | VTable-Gantt 的整合層；將元件的可變資料與文件模型隔離。 |
 | model.ts | 文件格式、驗證、日曆日期運算、範例及歷史快照。 |
 | calendar.ts、calendar-picker.ts、calendar.css | 西曆運算、週次、日期範圍與可鍵盤操作的月曆。 |
@@ -123,14 +188,16 @@ VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8
 | *.test.ts | 文件、日曆、日期界限、拖曳與捲動的回歸測試。 |
 | vite.config.ts | 靜態建置與第三方授權檔打包。 |
 | .github/workflows/deploy.yml | GitHub Actions 測試、建置與 Pages 自動發布。 |
+| .github/workflows/desktop.yml | Windows／macOS 安裝檔編譯、測試、核對與 GitHub Release 發布。 |
+| scripts/desktop-release.mjs、scripts/desktop-licenses.mjs | 發布版本檢查、雜湊校驗、附件發布與 Rust 授權文字蒐集。 |
 
 日期儲存為 YYYY-MM-DD 的日曆日期，模型使用 UTC 做天數運算；繪圖層轉為元件使用的本地日期格式，避免將 UTC 時間戳誤當成日曆日期。升級 VTable 時，應重新驗證跨時區拖曳、里程碑與標記標籤的整合行為。
 
 ## 保存與資料範圍
 
 - 不需要帳號，文件資料不會由應用傳送到伺服器。
-- 自動保存僅限目前瀏覽器與網站來源；清除網站資料、切換裝置或使用無痕模式時，仍需依靠下載的 JSON。
-- 如果瀏覽器禁止儲存或空間不足，介面會顯示提示；JSON 下載仍可使用。
+- 自動保存僅限目前瀏覽器來源或目前電腦的 pst App；清除網站／App 資料、切換裝置或使用無痕模式時，仍需依靠另存的 JSON。
+- 如果環境禁止儲存或空間不足，介面會顯示提示；請另存 JSON 保留內容。
 - 匯入文件會驗證每一列，不會默默刪除格式錯誤的項目。無法讀取的既有儲存內容會保留原始備份供下載。
 - v0.1 的 schemaVersion 1 文件和自動保存內容可直接開啟；缺少的新日曆與拖曳設定會補上預設，原項目與日期保留。
 - 目前支援 1900–2100 年、最多 200 個項目、50 條日期標記；顯示起訖日期相差不超過 730 天，匯入 JSON 不超過 1,000,000 bytes。
@@ -138,14 +205,14 @@ VTable 的核心採 [MIT 授權](https://github.com/VisActor/VTable/blob/v1.26.8
 
 ## 驗證狀態與目前界限
 
-v0.2 已通過 54 個自動化測試，涵蓋文件格式、舊檔遷移、閏年、月底、跨年 ISO 週、時區／夏令時間、格點吸附、日期界限、捲動與復原／重做。每次發布均由 GitHub Actions 重新執行測試、嚴格 TypeScript 檢查及正式建置。
+v0.3.0 的前端自動化測試共 72 項，包含 v0.2 的文件、日期、格點與歷史紀錄回歸，以及新增的原生檔案取消、錯誤、大小界線、原始備份保存和非同步關閉次序。桌面發布另執行 Rust 檔案處理測試、版本與附件校驗測試、TypeScript 檢查、兩個平台的正式編譯與 macOS Universal 架構／ad-hoc 簽章核對。
 
 已在正式網站完成桌面瀏覽器互動抽查：日曆方向鍵與 Enter 選日、本週／全年範圍、1 天和 7 天吸附、整段移動保留天數、拖動右端調整日期、單次復原、時間軸滑桿、縮小後符合寬度、兩條分隔線拖曳、面板收合／還原，以及 JSON 下載。2 倍 PNG 已實際下載並目視確認，範例輸出為 2056 × 1178 像素，包含全部 8 個項目與日期標記。
 
-這些是針對本版變更的互動抽查；觸控裝置、窄螢幕、跨瀏覽器、長時間邊緣捲動與極端長寬圖片尚未做完整相容性驗收。
+上面的圖表互動與 PNG 目視紀錄來自 v0.2 正式網站。桌面安裝包的編譯和自動化測試不等同於在所有 Windows／macOS 設備上逐項人工驗收；原生對話框、系統縮放與首次安裝提示仍需在實際使用設備確認。觸控、窄螢幕、跨瀏覽器、長時間邊緣捲動與極端長寬圖片尚未做完整相容性驗收。
 
 此版本提供固定的項目、起日、迄日與說明欄位，以及日期標線和里程碑。任意新增欄位、合併儲存格、自由文字框、箭頭塗鴉、SVG／PDF 輸出與跨裝置同步尚未實作。
 
 日期標記的標籤有固定最大寬度，過長文字會省略；日期很接近時，標籤可能重疊。這部分尚未提供自動避讓排版。
 
-此版優先改善日期、拖曳與出圖工作區；跨裝置協作與進階自由繪圖仍留待後續版本。
+此版加入可離線使用的桌面程式與自動打包發布；跨裝置協作與進階自由繪圖仍留待後續版本。

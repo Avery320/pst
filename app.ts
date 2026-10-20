@@ -6,6 +6,8 @@ import {
 } from './calendar.ts';
 import { attachDatePickers } from './calendar-picker.ts';
 import { setupWorkspaceLayout } from './layout.ts';
+import { isDesktop, openDocument, saveBlob, MAX_IMPORT_BYTES, installCloseHandler } from './platform.ts';
+import packageInfo from './package.json';
 import {
   DocumentHistory, addDays, cloneDocument, createDemoDocument, createEmptyDocument,
   daysBetween, getDocumentBounds, isValidDate, makeId, parseDocument,
@@ -15,7 +17,8 @@ import type { DateMarker, TimelineDocument, TimelineItem } from './model.ts';
 
 const STORAGE_KEY = 'pst.document.v1';
 const RECOVERY_KEY = 'pst.recovery.v1';
-const MAX_IMPORT_BYTES = 1_000_000;
+const DESKTOP = isDesktop();
+const EXPORT_ACTION_LABEL = DESKTOP ? '儲存 PNG 圖片' : '下載 PNG 圖片';
 const COLORS = ['#176b61', '#5269e8', '#e5913a', '#9b6bd3', '#d5617d', '#6b7a90'];
 const COLOR_NAMES = ['松綠', '靛藍', '暖橘', '紫藤', '玫瑰', '石灰藍'];
 const ICONS: Record<string, string> = {
@@ -55,6 +58,13 @@ function icon(name: string): string {
 for (const target of document.querySelectorAll<HTMLElement>('[data-icon]')) {
   target.innerHTML = icon(target.dataset.icon!); // Icons are fixed, trusted application markup.
 }
+element('app-version').textContent = `pst v${packageInfo.version}${DESKTOP ? ' 桌面版' : ''}`;
+element('footer-storage').textContent = DESKTOP ? '資料保存在這台電腦' : '資料保存在你的瀏覽器';
+element('storage-description').textContent = DESKTOP
+  ? '編輯會自動保存在這台電腦的 pst App。另存 JSON，可備份或在網頁版接續編輯。'
+  : '編輯會自動保存在目前瀏覽器。下載 JSON，可在另一台裝置接續編輯。';
+element('settings-save-label').textContent = DESKTOP ? '另存可編輯的 JSON' : '下載可編輯的 JSON';
+element('export-button-label').textContent = EXPORT_ACTION_LABEL;
 
 let startupMessage = '';
 let recoveryRaw: string | null = null;
@@ -70,14 +80,14 @@ try {
       recoveryRaw = saved;
       try { localStorage.setItem(RECOVERY_KEY, saved); } catch { autosaveAllowed = false; }
       initialDocument = createDemoDocument();
-      startupMessage = '上次的儲存內容無法讀取，已保留原始內容。可到「圖面」下載備份；目前先開啟範例。';
+      startupMessage = '上次的儲存內容無法讀取，已保留原始內容。可到「圖面」另存備份；目前先開啟範例。';
     }
   } else {
     initialDocument = createDemoDocument();
   }
 } catch {
   initialDocument = createDemoDocument();
-  startupMessage = '此瀏覽器目前無法自動保存。編輯完成後，請下載 JSON 保留內容。';
+  startupMessage = '目前無法自動保存。編輯完成後，請另存 JSON 保留內容。';
 }
 
 const history = new DocumentHistory(initialDocument);
@@ -88,6 +98,7 @@ let chart: TimelineChart | null = null;
 let chartFrame = 0;
 let toastTimer = 0;
 let exporting = false;
+let fileOperationPending = false;
 let dragging = false;
 let pendingScrollDate: string | null = null;
 let datePickers: ReturnType<typeof attachDatePickers> | null = null;
@@ -131,10 +142,10 @@ function saveLocally(): void {
   try {
     if (!autosaveAllowed) throw new Error('recovery pending');
     localStorage.setItem(STORAGE_KEY, serializeDocument(state));
-    text.textContent = '已儲存在此瀏覽器';
+    text.textContent = DESKTOP ? '已儲存在這台電腦' : '已儲存在此瀏覽器';
   } catch {
     failed = true;
-    text.textContent = autosaveAllowed ? '自動保存不可用，請下載 JSON' : '請先下載原始備份，再繼續保存';
+    text.textContent = autosaveAllowed ? '自動保存不可用，請另存 JSON' : '請先另存原始備份，再繼續保存';
   }
   status.replaceChildren(dot, text);
   status.classList.toggle('error', failed);
@@ -448,29 +459,21 @@ function safeFilename(title: string, extension: string): string {
   return `${name}.${extension}`;
 }
 
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function flushTextInput(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
 
 async function downloadDocument(): Promise<void> {
+  if (fileOperationPending || exporting) return;
+  fileOperationPending = true;
   try {
     flushTextInput();
     // VTable editors commit separately from normal form blur events.
     await chart?.flushEdits();
-    downloadBlob(new Blob([serializeDocument(state)], { type: 'application/json;charset=utf-8' }), safeFilename(state.title, 'json'));
-    toast('已下載 JSON；下次可用「開啟 JSON」繼續編輯。');
+    const saved = await saveBlob(new Blob([serializeDocument(state)], { type: 'application/json;charset=utf-8' }), safeFilename(state.title, 'json'), 'json');
+    if (saved) toast(`${DESKTOP ? '已儲存' : '已下載'} JSON；下次可用「開啟 JSON」繼續編輯。`);
   } catch (error) { toast(errorMessage(error), true); }
+  finally { fileOperationPending = false; }
 }
 
 function wrapCanvasText(context: CanvasRenderingContext2D, text: string, width: number): string[] {
@@ -496,7 +499,7 @@ async function prepareExportImage(dataUrl: string, snapshot: TimelineDocument, s
   const padding = withTitle ? 28 * scale : 0;
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('此瀏覽器無法產生圖片。');
+  if (!context) throw new Error('目前無法產生圖片。');
   const width = image.naturalWidth + padding * 2;
   const textWidth = Math.max(100, width - padding * 2);
   const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -720,7 +723,21 @@ for (const id of ['load-demo', 'empty-demo']) {
   element(id).addEventListener('click', () => replaceDocument(createDemoDocument(), '已載入範例；可使用復原回到上一份。'));
 }
 for (const id of ['save-document', 'settings-save']) element(id).addEventListener('click', downloadDocument);
-element('import-document').addEventListener('click', () => element<HTMLInputElement>('import-file').click());
+element('import-document').addEventListener('click', async () => {
+  if (fileOperationPending || exporting) return;
+  if (!DESKTOP) {
+    element<HTMLInputElement>('import-file').click();
+    return;
+  }
+  fileOperationPending = true;
+  try {
+    flushTextInput();
+    await chart?.flushEdits();
+    const file = await openDocument();
+    if (file) replaceDocument(parseDocument(file.content), '已開啟 JSON 圖表；原本的內容可透過復原還原。');
+  } catch (error) { toast(errorMessage(error), true); }
+  finally { fileOperationPending = false; }
+});
 element('import-file').addEventListener('change', async () => {
   const input = element<HTMLInputElement>('import-file');
   const file = input.files?.[0];
@@ -746,8 +763,9 @@ element('open-export').addEventListener('click', async () => {
 element('close-export').addEventListener('click', () => { if (!exporting) exportDialog.close(); });
 exportDialog.addEventListener('cancel', event => { if (exporting) event.preventDefault(); });
 element('export-png').addEventListener('click', async () => {
-  if (!chart || exporting) return;
+  if (!chart || exporting || fileOperationPending) return;
   exporting = true;
+  fileOperationPending = true;
   const button = element<HTMLButtonElement>('export-png');
   button.disabled = true;
   element<HTMLButtonElement>('close-export').disabled = true;
@@ -760,17 +778,21 @@ element('export-png').addEventListener('click', async () => {
     const image = await chart.exportPng(scale);
     const snapshot = cloneDocument(state);
     const blob = await prepareExportImage(image, snapshot, scale, withTitle);
-    downloadBlob(blob, safeFilename(snapshot.title, 'png'));
-    exportDialog.close();
-    toast('PNG 已下載，包含完整表格與目前日期範圍。');
+    element('export-button-label').textContent = DESKTOP ? '請選擇儲存位置…' : '正在下載圖片…';
+    const saved = await saveBlob(blob, safeFilename(snapshot.title, 'png'), 'png');
+    if (saved) {
+      exportDialog.close();
+      toast(`PNG 已${DESKTOP ? '儲存' : '下載'}，包含完整表格與目前日期範圍。`);
+    }
   } catch (error) {
     element('export-error').textContent = errorMessage(error);
     element('export-error').hidden = false;
   } finally {
     exporting = false;
+    fileOperationPending = false;
     button.disabled = false;
     element<HTMLButtonElement>('close-export').disabled = false;
-    element('export-button-label').textContent = '下載 PNG 圖片';
+    element('export-button-label').textContent = EXPORT_ACTION_LABEL;
   }
 });
 
@@ -781,7 +803,7 @@ element('retry-chart').addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', event => {
-  if (document.querySelector('dialog[open]') || !(event.metaKey || event.ctrlKey)) return;
+  if (fileOperationPending || document.querySelector('dialog[open]') || !(event.metaKey || event.ctrlKey)) return;
   if (event.key.toLowerCase() === 's') {
     event.preventDefault(); downloadDocument(); return;
   }
@@ -799,12 +821,19 @@ if (recoveryRaw) {
   recovery.type = 'button';
   recovery.className = 'button button-secondary full-width';
   recovery.style.marginTop = '10px';
-  recovery.textContent = '下載上次無法讀取的原始備份';
-  recovery.addEventListener('click', () => {
-    downloadBlob(new Blob([recoveryRaw!], { type: 'application/json;charset=utf-8' }), 'pst-recovery.json');
-    autosaveAllowed = true;
-    saveLocally();
-    toast('原始備份已下載。');
+  recovery.textContent = '另存上次無法讀取的原始備份';
+  recovery.addEventListener('click', async () => {
+    if (fileOperationPending || exporting) return;
+    fileOperationPending = true;
+    recovery.disabled = true;
+    try {
+      const saved = await saveBlob(new Blob([recoveryRaw!], { type: 'application/json;charset=utf-8' }), 'pst-recovery.json', 'json');
+      if (!saved) return;
+      autosaveAllowed = true;
+      saveLocally();
+      toast(`原始備份已${DESKTOP ? '儲存' : '下載'}。`);
+    } catch (error) { toast(errorMessage(error), true); }
+    finally { fileOperationPending = false; recovery.disabled = false; }
   });
   element('settings-save').after(recovery);
 }
@@ -836,4 +865,10 @@ setupWorkspaceLayout(() => chart?.resize());
 resetMarkerEditor();
 render();
 saveLocally();
+void installCloseHandler(async () => {
+  if (fileOperationPending || exporting) throw new Error('請先完成或取消目前的檔案操作，再關閉 App。');
+  flushTextInput();
+  await chart?.flushEdits();
+  saveLocally();
+}, error => toast(error.message, true)).catch(error => toast(errorMessage(error), true));
 if (startupMessage) toast(startupMessage, true);

@@ -157,3 +157,10 @@ Thumbs.db
 # Local test artifacts
 test-results/
 playwright-report/
+
+# Rust / Tauri build output (Cargo.lock is intentionally committed)
+src-tauri/target/
+src-tauri/gen/
+src-tauri/THIRD_PARTY_SOURCES/
+desktop-artifacts/
+release-assets/
