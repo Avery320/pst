@@ -28,7 +28,7 @@ export async function exportDocumentPng(snapshot: TimelineDocument, scale: 1 | 2
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   if (!context) throw new Error('此瀏覽器無法產生圖片。');
-  const width = drawing.width * scale + padding * 2;
+  const width = Math.ceil(drawing.width * scale + padding * 2);
   context.font = `${T['weight-strong']} ${titleSize}px ${T['font-family']}`;
   const titleLines = withTitle ? wrapCanvasText(context, snapshot.title, drawing.width * scale) : [];
   context.font = `${bodySize}px ${T['font-family']}`;
