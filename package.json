@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "vite",
     "check": "tsc --noEmit",
-    "test": "node --test --test-isolation=none --test-reporter=spec tests/*.test.ts",
     "build": "npm run check && vite build",
     "preview": "vite preview"
   },

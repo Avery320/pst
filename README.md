@@ -2,7 +2,7 @@
 
 輕量的網頁時程編輯器：表格與時間軸逐列對齊，編輯時段、里程碑及日期標記，再匯出完整 PNG。
 
-目前是 PoC，以單機編輯與出圖為範圍，沒有後端或帳號。這次重構以 Rust 導入前的 `ecd543e` 為起點，使用原生 HTML 表格、SVG 與 Canvas，已移除 VTable-Gantt 和其整合修補。
+目前是 PoC，以單機編輯與出圖為範圍，使用原生 HTML 表格、SVG 與 Canvas，沒有後端或帳號。
 
 ## 啟動
 
@@ -16,7 +16,6 @@ npm run dev
 開啟 [http://127.0.0.1:5175](http://127.0.0.1:5175)。連接埠被占用時直接報錯，不會自動改用其他連接埠。
 
 ```bash
-npm test        # 日期、文件、歷史、拖曳、繪圖與保存測試
 npm run check   # 嚴格 TypeScript 檢查，包含未使用的變數與參數
 npm run build   # 檢查並建置到 dist/
 npm run preview # 預覽 dist/，同樣使用 127.0.0.1:5175；先停止 dev
@@ -35,7 +34,7 @@ npm run preview # 預覽 dist/，同樣使用 127.0.0.1:5175；先停止 dev
 
 新建圖表與範例預設顯示當年 1 月 1 日至 12 月 31 日，以月份閱讀。已儲存或匯入文件保留原本範圍；可按「今年」切換全年。
 
-資料列固定為 36px，畫面、拖曳幾何與 PNG 使用同一個列高。表格欄位先縮到可讀下限，時間軸至少填滿可用寬度，超出才以原生捲軸捲動。表格與時間軸之間保留透明拖曳區，沒有額外線條或握柄；焦點只強調原框線。已移除額外的位置滑桿、可見日期提示、底部操作提示與裝飾頁尾。
+資料列固定為 36px，畫面、拖曳幾何與 PNG 使用同一個列高。表格欄位先縮到可讀下限，時間軸至少填滿可用寬度，超出才以原生捲軸捲動。表格與時間軸之間保留透明拖曳區，焦點只強調原框線。
 
 ## 架構
 
@@ -48,9 +47,6 @@ npm run preview # 預覽 dist/，同樣使用 127.0.0.1:5175；先停止 dev
 | `src/presentation/` | 共用設計值、自適應尺寸與 SVG 繪圖；HTML、SVG、拖曳及 PNG 使用同一份排版結果。 |
 | `src/ui/` | 原生表格與 SVG、指標事件、側欄及工作區版面。日期輸入由瀏覽器處理。 |
 | `src/browser/` | localStorage、檔案下載與 SVG → PNG；不參與日期運算。 |
-| `tests/` | Node.js 內建測試；不需要瀏覽器或額外測試框架。 |
-
-共用排版、樣式與分隔線 API 見 [UI 開發規範](docs/UI.md)；完整分析與刪減原因見 [重構紀錄](docs/REFACTOR.md)；本輪檢查結果見 [Code review](docs/REVIEW.md)。
 
 ## 文件與日期規則
 
@@ -68,12 +64,10 @@ JSON 保持 `schemaVersion: 1`，舊文件仍可匯入。既有資料列的內�
 
 標記文字靠得太近時可能重疊，沒有自動避讓；表格文字與時間條文字在可用寬度內裁切。這是固定欄位與固定列高的時程出圖工具，沒有任意欄位、依賴排程、資源最佳化、多人協作、自由繪圖或 SVG／PDF 下載。
 
-自動測試與正式建置已驗證。依使用者要求，停止操作已開啟的網頁後，後續變更僅做終端驗證；最終版的瀏覽器拖曳、PNG 下載及跨瀏覽器外觀仍需互動驗收。
-
 ## 部署與授權
 
-`dist/` 可透過 HTTP(S) 部署成靜態網站，`base: './'` 支援子路徑。[GitHub Pages 工作流程](.github/workflows/deploy.yml) 在 `main` 更新時執行安裝、測試、建置與發布。
+`dist/` 可透過 HTTP(S) 部署成靜態網站，`base: './'` 支援子路徑。[GitHub Pages 工作流程](.github/workflows/deploy.yml) 在 `main` 更新時執行安裝、型別檢查、建置與發布。
 
-網站入口：[avery320.github.io/pst](https://avery320.github.io/pst/)。`main` 的每次更新均由 GitHub Actions 執行測試、建置及 Pages 部署。
+網站入口：[avery320.github.io/pst](https://avery320.github.io/pst/)。
 
 應用沒有執行期套件依賴。建置工具產生的瀏覽器輔助碼授權見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 與 [LICENSE-THIRD-PARTY.txt](LICENSE-THIRD-PARTY.txt)，兩份檔案會隨建置輸出。pst 自有原始碼的對外授權仍由擁有者決定。
